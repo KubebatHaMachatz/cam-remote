@@ -141,7 +141,7 @@ Exit codes, for scripting:
 ## Tests
 
 ```bash
-cd android && ./gradlew :core:test :app:testDebugUnitTest   # 145 unit tests
+cd android && ./gradlew :core:test :app:testDebugUnitTest   # 168 unit tests
 cd python  && python3 -m unittest discover -s tests -t .    # 65 unit tests
 ```
 
