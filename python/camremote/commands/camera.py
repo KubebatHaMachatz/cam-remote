@@ -1,0 +1,111 @@
+"""Opening the camera app, and taking a photograph."""
+
+from __future__ import annotations
+
+import argparse
+from pathlib import Path
+
+from camremote.commands.base import CliCommand, Context
+
+
+def _configure_open(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--lens",
+        choices=("front", "rear"),
+        help="Ask the camera app for a particular lens. A hint only; apps may ignore it.",
+    )
+    parser.add_argument(
+        "--package",
+        help="Open a specific camera app rather than the device default.",
+    )
+
+
+def _open(context: Context) -> int:
+    params = {}
+    if context.args.lens:
+        params["lens"] = context.args.lens
+    if context.args.package:
+        params["package"] = context.args.package
+
+    response = context.agent.invoke("camera.open", params or None)
+    context.emit(response.data, f"Opened {response.data.get('component', 'the camera app')}")
+    return 0
+
+
+def _configure_capture(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--out",
+        type=Path,
+        default=Path("shots"),
+        help="Where to save the photo on this machine (default: ./shots).",
+    )
+    parser.add_argument("--filename", help="Name for the file on the device.")
+    parser.add_argument("--path", help="Destination directory on the device.")
+    parser.add_argument(
+        "--quality",
+        type=int,
+        metavar="1-100",
+        help="JPEG quality (default: the agent's, 95).",
+    )
+    parser.add_argument(
+        "--gallery",
+        action="store_true",
+        help="Also index the photo in the device gallery.",
+    )
+    parser.add_argument(
+        "--no-download",
+        action="store_true",
+        help="Leave the photo on the device instead of fetching it.",
+    )
+
+
+def _capture(context: Context) -> int:
+    params = {}
+    if context.args.path:
+        params["path"] = context.args.path
+    if context.args.filename:
+        params["filename"] = context.args.filename
+    if context.args.quality is not None:
+        params["jpegQuality"] = context.args.quality
+    if context.args.gallery:
+        params["publishToGallery"] = True
+
+    response = context.agent.invoke("camera.capture", params or None)
+    data = dict(response.data)
+
+    lines = [
+        f"Captured {data.get('widthPx')}x{data.get('heightPx')}, "
+        f"{_megabytes(data.get('sizeBytes'))} in {response.duration_ms} ms",
+        f"On the device: {data.get('path')}",
+    ]
+
+    if not context.args.no_download and data.get("downloadPath"):
+        saved = context.agent.download(data["downloadPath"], context.args.out)
+        # The path on the handset is of no use here; the point of the download route is that the
+        # operator ends up holding the photograph.
+        data["savedTo"] = str(saved)
+        lines.append(f"Saved to: {saved}")
+
+    context.emit(data, *lines)
+    return 0
+
+
+def _megabytes(size: int | None) -> str:
+    if not size:
+        return "unknown size"
+    return f"{size / 1_000_000:.2f} MB"
+
+
+OPEN_CAMERA = CliCommand(
+    name="open-camera",
+    help="Open the camera app on the device.",
+    run=_open,
+    add_arguments=_configure_open,
+)
+
+TAKE_PICTURE = CliCommand(
+    name="take-picture",
+    help="Take a still with the rear camera and download it.",
+    run=_capture,
+    add_arguments=_configure_capture,
+)

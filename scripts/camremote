@@ -1,0 +1,8 @@
+#!/usr/bin/env bash
+# Runs the control application from anywhere in the repository.
+#
+# The client is a plain package with no dependencies and no install step, so all this does is put
+# it on the import path. `cd python && python3 -m camremote ...` is exactly equivalent.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+PYTHONPATH="$here/python${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m camremote "$@"
