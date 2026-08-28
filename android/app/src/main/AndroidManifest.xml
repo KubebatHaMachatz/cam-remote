@@ -15,6 +15,11 @@
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CAMERA" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
@@ -30,6 +35,33 @@
         android:allowBackup="false"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.Material3.DayNight" />
+        android:theme="@style/Theme.Material3.DayNight">
+
+        <activity
+            android:name=".setup.SetupActivity"
+            android:exported="true"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+          camera:      required from API 34 to touch the camera from a service.
+          specialUse:  the agent is a long-lived local-network server, which is not any of the
+                       predefined types. dataSync would fit less well and carries a daily runtime
+                       cap that would stop the agent after six hours.
+        -->
+        <service
+            android:name=".service.RemoteControlService"
+            android:exported="false"
+            android:foregroundServiceType="camera|specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Remotely controlled camera agent serving a local-network command API" />
+        </service>
+
+    </application>
 
 </manifest>
