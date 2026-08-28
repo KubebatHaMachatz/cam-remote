@@ -19,11 +19,12 @@ from camremote.models import CommandResponse
 class FakeClient:
     """Stands in for a RemoteClient, recording calls and replaying scripted results."""
 
-    def __init__(self, results=None, health=None, token="paired-token", raises=None):
+    def __init__(self, results=None, health=None, token="paired-token", raises=None, failures=None):
         self.results = results or {}
         self._health = health or {"service": "cam-remote", "apiVersion": "v1"}
         self.token = token
         self.raises = raises
+        self.failures = failures or {}
         self.calls = []
         self.downloads = []
         self.base_url = "http://10.0.0.4:8099"
@@ -32,6 +33,8 @@ class FakeClient:
         self.calls.append((command, params))
         if self.raises:
             raise self.raises
+        if command in self.failures:
+            raise self.failures[command]
         data = self.results.get(command, {})
         return CommandResponse(id="1", command=command, status="OK", data=data, duration_ms=5)
 
@@ -327,6 +330,145 @@ class CatalogTest(CliTestCase):
         self.run_cli("status", client=client)
 
         self.assertIn("canDrawOverlays", self.out.getvalue())
+
+
+class DeviceReportTest(CliTestCase):
+    """A single command that gathers everything a new handset reveals."""
+
+    def report_client(self, **overrides):
+        results = {
+            "system.status": {
+                "device": {"model": "SM-S921B", "androidRelease": "14", "apiLevel": 34},
+                "setupComplete": True,
+                "missing": [],
+                "hasRearCamera": True,
+                "permissions": {"camera": True},
+            },
+            "camera.apps": {
+                "wouldUseStrategy": "still_image_camera",
+                "wouldUseComponent": "com.sec.android.app.camera/.Camera",
+                "strategies": [
+                    {
+                        "strategy": "still_image_camera",
+                        "action": "android.media.action.STILL_IMAGE_CAMERA",
+                        "chosen": "com.sec.android.app.camera/.Camera",
+                        "handlers": [
+                            {
+                                "package": "com.sec.android.app.camera",
+                                "activity": ".Camera",
+                                "preinstalled": True,
+                                "userDefault": False,
+                            }
+                        ],
+                    }
+                ],
+            },
+            "device.getprop": {"properties": {"ro.product.manufacturer": "samsung"}},
+            "system.commands": {"commands": [{"name": "camera.open", "description": "x"}]},
+        }
+        results.update(overrides.pop("results", {}))
+        return FakeClient(results=results, **overrides)
+
+    def test_summarises_the_device(self):
+        code = self.run_cli("device-report", client=self.report_client())
+
+        self.assertEqual(0, code)
+        output = self.out.getvalue()
+        self.assertIn("SM-S921B", output)
+        self.assertIn("com.sec.android.app.camera", output)
+        self.assertIn("still_image_camera", output)
+
+    def test_gathers_everything_in_one_round_of_commands(self):
+        client = self.report_client()
+
+        self.run_cli("device-report", client=client)
+
+        self.assertEqual(
+            {"system.status", "camera.apps", "device.getprop", "system.commands"},
+            {command for command, _ in client.calls},
+        )
+
+    def test_json_output_is_one_blob_to_paste_into_a_matrix(self):
+        self.run_cli("--json", "device-report", client=self.report_client())
+
+        report = json.loads(self.out.getvalue())
+        self.assertIn("status", report)
+        self.assertIn("cameraApps", report)
+        self.assertIn("properties", report)
+
+    def test_writes_the_report_to_a_file_when_asked(self):
+        with TemporaryDirectory() as directory:
+            target = Path(directory) / "s24.json"
+
+            self.run_cli("device-report", "--out", str(target), client=self.report_client())
+
+            self.assertIn("SM-S921B", json.loads(target.read_text())["status"]["device"]["model"])
+
+    def test_keeps_going_when_part_of_the_device_is_broken(self):
+        # The whole point of a diagnostic is to run on a device that is not working. If camera.apps
+        # fails because the camera permission is missing, the report must still tell you that.
+        client = self.report_client(
+            failures={
+                "camera.apps": CommandFailed(
+                    command="camera.apps",
+                    code="PERMISSION_DENIED",
+                    message="camera permission missing",
+                )
+            }
+        )
+
+        code = self.run_cli("--json", "device-report", client=client)
+
+        self.assertEqual(0, code)
+        report = json.loads(self.out.getvalue())
+        self.assertEqual("PERMISSION_DENIED", report["cameraApps"]["error"]["code"])
+        self.assertIn("SM-S921B", report["status"]["device"]["model"])
+
+    def test_reports_the_error_visibly_in_the_human_summary_too(self):
+        client = self.report_client(
+            failures={
+                "camera.apps": CommandFailed(
+                    command="camera.apps", code="PERMISSION_DENIED", message="nope"
+                )
+            }
+        )
+
+        self.run_cli("device-report", client=client)
+
+        self.assertIn("PERMISSION_DENIED", self.out.getvalue())
+
+
+class CameraAppsTest(CliTestCase):
+    def test_lists_every_camera_app_the_device_offers(self):
+        client = FakeClient(
+            {
+                "camera.apps": {
+                    "wouldUseStrategy": "app_camera_category",
+                    "wouldUseComponent": "com.android.camera2/.CameraActivity",
+                    "strategies": [
+                        {
+                            "strategy": "app_camera_category",
+                            "action": "android.intent.action.MAIN",
+                            "chosen": "com.android.camera2/.CameraActivity",
+                            "handlers": [
+                                {
+                                    "package": "com.android.camera2",
+                                    "activity": ".CameraActivity",
+                                    "preinstalled": True,
+                                    "userDefault": False,
+                                }
+                            ],
+                        }
+                    ],
+                }
+            }
+        )
+
+        code = self.run_cli("camera-apps", client=client)
+
+        self.assertEqual(0, code)
+        self.assertIn("com.android.camera2", self.out.getvalue())
+        self.assertIn("app_camera_category", self.out.getvalue())
 
 
 if __name__ == "__main__":

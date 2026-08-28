@@ -5,6 +5,7 @@ import com.camremote.core.command.CommandOutcome.Success
 import com.camremote.core.command.DeviceResource
 import com.camremote.core.port.ActivityStarter
 import com.camremote.core.port.LaunchSpec
+import com.camremote.core.port.ResolvedActivity
 import com.camremote.core.port.PermissionInspector
 import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.Params
@@ -36,8 +37,12 @@ class OpenCameraCommandTest {
         val attempted = mutableListOf<String>()
         var started: LaunchSpec? = null
 
-        override fun resolve(spec: LaunchSpec): String? =
-            if (spec.strategy in resolves) "com.example.camera/.Camera_${spec.strategy}" else null
+        override fun resolveAll(spec: LaunchSpec): List<ResolvedActivity> =
+            if (spec.strategy in resolves) {
+                listOf(ResolvedActivity("com.example.camera", ".Camera_${spec.strategy}", isSystem = true))
+            } else {
+                emptyList()
+            }
 
         override fun start(spec: LaunchSpec) {
             attempted += spec.strategy
@@ -62,6 +67,8 @@ class OpenCameraCommandTest {
             JsonPrimitive("com.example.camera/.Camera_still_image_camera"),
             data?.get("component"),
         )
+        // Launched by explicit component, so no chooser can appear on a device with two cameras.
+        assertEquals("com.example.camera/.Camera_still_image_camera", device.started?.component)
         assertEquals("android.media.action.STILL_IMAGE_CAMERA", device.started?.action)
     }
 
