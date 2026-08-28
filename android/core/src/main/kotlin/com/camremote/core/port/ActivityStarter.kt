@@ -11,7 +11,16 @@ data class LaunchSpec(
     val action: String,
     val targetPackage: String? = null,
     val newTask: Boolean = true,
+    val categories: Set<String> = emptySet(),
     val extras: Map<String, ExtraValue> = emptyMap(),
+    /**
+     * A short name for the approach this spec represents, reported back to the client.
+     *
+     * Diagnostic rather than functional: across a fleet of handsets, knowing that the Samsung
+     * answered `app_camera_category` while the realme answered `still_image_camera` is the
+     * difference between "it works everywhere" and understanding why.
+     */
+    val strategy: String = "default",
 )
 
 /** The handful of intent-extra types this project needs, modelled without Android's Bundle. */

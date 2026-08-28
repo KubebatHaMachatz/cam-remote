@@ -18,11 +18,17 @@ import kotlinx.serialization.json.buildJsonObject
 /**
  * Opens the device's camera app — the assignment's first requirement.
  *
- * The interesting part is not the intent, it is the precondition. Since Android 10 an app in the
- * background may not start an activity, and this agent is by design always in the background. The
- * documented escape hatch is the "Display over other apps" permission, so the command checks for it
- * and, when it is missing, says so with the fix attached instead of firing an intent the system
- * will silently discard.
+ * Two things make this harder than it looks.
+ *
+ * The precondition: since Android 10 an app in the background may not start an activity, and this
+ * agent is by design always in the background. The documented escape hatch is the "Display over
+ * other apps" permission, so the command checks for it and, when it is missing, says so with the fix
+ * attached instead of firing an intent the system will silently discard.
+ *
+ * And portability: no single intent opens the camera app on every device. The command works through
+ * [CameraAppLaunch]'s ordered candidates, skipping those nothing handles and those the platform
+ * refuses to start, and reports which one succeeded so a device's quirks can be diagnosed from the
+ * control machine rather than by picking the handset up.
  */
 class OpenCameraCommand(
     private val activities: ActivityStarter,
@@ -54,7 +60,7 @@ class OpenCameraCommand(
     override val timeout = 15.seconds
 
     override suspend fun execute(params: Params): CommandOutcome {
-        val spec = CameraAppLaunch.specFor(params)
+        val candidates = CameraAppLaunch.candidatesFor(params)
 
         if (!permissions.status().canDrawOverlays) {
             return CommandOutcome.failure(
@@ -65,27 +71,44 @@ class OpenCameraCommand(
             )
         }
 
-        val component = activities.resolve(spec) ?: return CommandOutcome.failure(
-            code = ErrorCode.DEVICE_ERROR,
-            message = "No installed app handles ${spec.action}" +
-                (spec.targetPackage?.let { " in package $it" } ?: ""),
-            remediation = "Install a camera app, or omit the 'package' parameter",
-        )
+        var resolvedAny = false
+        var lastFailure: Exception? = null
 
-        return try {
-            activities.start(spec)
-            CommandOutcome.Success(
-                buildJsonObject {
-                    put("launched", JsonPrimitive(true))
-                    put("component", JsonPrimitive(component))
-                    spec.targetPackage?.let { put("package", JsonPrimitive(it)) }
-                },
-            )
-        } catch (e: Exception) {
+        for (spec in candidates) {
+            // Resolving proves an activity exists; it does not prove this app may launch it, so a
+            // start that throws falls through to the next candidate rather than ending the attempt.
+            val component = activities.resolve(spec) ?: continue
+            resolvedAny = true
+            try {
+                activities.start(spec)
+                return CommandOutcome.Success(
+                    buildJsonObject {
+                        put("launched", JsonPrimitive(true))
+                        put("component", JsonPrimitive(component))
+                        put("strategy", JsonPrimitive(spec.strategy))
+                        put("action", JsonPrimitive(spec.action))
+                        spec.targetPackage?.let { put("package", JsonPrimitive(it)) }
+                    },
+                )
+            } catch (e: Exception) {
+                lastFailure = e
+            }
+        }
+
+        val scope = candidates.firstOrNull()?.targetPackage?.let { " in package $it" } ?: ""
+        return if (resolvedAny) {
             CommandOutcome.failure(
                 code = ErrorCode.DEVICE_ERROR,
-                message = "Could not start the camera app: ${e.message}",
+                message = "Every camera app this device offers refused to start: ${lastFailure?.message}",
                 remediation = "Check that cam-remote still holds \"Display over other apps\"",
+            )
+        } else {
+            CommandOutcome.failure(
+                code = ErrorCode.DEVICE_ERROR,
+                message = "No installed app handles any known camera intent$scope " +
+                    "(tried ${candidates.joinToString { it.strategy }})",
+                remediation = "Install a camera app, or omit the 'package' parameter. " +
+                    "camera.capture does not need one — it drives the sensor directly.",
             )
         }
     }

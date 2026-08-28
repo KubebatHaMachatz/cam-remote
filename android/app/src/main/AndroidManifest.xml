@@ -24,11 +24,27 @@
 
     <uses-feature android:name="android.hardware.camera.any" android:required="false" />
 
-    <!-- API 30+ package visibility: without this, resolveActivity cannot see the camera app and
-         camera.open would report "no camera app installed" on every modern device. -->
+    <!--
+      API 30+ package visibility: without this, resolveActivity cannot see the camera app and
+      camera.open would report "no camera app installed" on every modern device.
+
+      One entry per strategy in CameraAppLaunch. A missing entry here does not fail loudly - the
+      candidate simply never resolves - so the two lists have to be kept in step.
+    -->
     <queries>
         <intent>
             <action android:name="android.media.action.STILL_IMAGE_CAMERA" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.APP_CAMERA" />
+        </intent>
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
 

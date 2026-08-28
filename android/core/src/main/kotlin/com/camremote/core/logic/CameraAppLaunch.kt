@@ -6,30 +6,70 @@ import com.camremote.core.protocol.InvalidParamsException
 import com.camremote.core.protocol.Params
 
 /**
- * Turns `camera.open` parameters into a [LaunchSpec].
+ * Works out the ordered list of ways to open a camera app.
  *
- * The lens hint is exactly that — a hint. There is no platform contract obliging a camera app to
- * honour it, and OEM apps vary, so both of the conventional extras are set and the command's
+ * There is no single intent every Android device answers. `STILL_IMAGE_CAMERA` is the semantically
+ * correct one and is what ColorOS answers, but OEM builds vary and bare AOSP system images often
+ * declare none of them — some ship no camera app at all. So the command is given candidates to try
+ * in order rather than one intent to fire and hope for.
+ *
+ * The lens hint is exactly that — a hint. No platform contract obliges a camera app to honour it,
+ * and OEM apps vary, so both conventional extras are set on every candidate and the command's
  * description says the behaviour is best-effort. The rear-camera *requirement* in the assignment is
- * met by `camera.capture`, which controls the sensor directly and does not depend on anyone's
- * goodwill.
+ * met by `camera.capture`, which drives the sensor directly and depends on nobody's goodwill.
  */
 object CameraAppLaunch {
 
-    /** The platform action for "open a camera app ready to take a still". */
+    /** "Open a camera app ready to take a still." The most semantically correct choice. */
     const val STILL_IMAGE_CAMERA_ACTION = "android.media.action.STILL_IMAGE_CAMERA"
+
+    /** "Take a picture and hand it back." Widely declared, but see the ordering note below. */
+    const val IMAGE_CAPTURE_ACTION = "android.media.action.IMAGE_CAPTURE"
+
+    private const val MAIN_ACTION = "android.intent.action.MAIN"
+    private const val CATEGORY_APP_CAMERA = "android.intent.category.APP_CAMERA"
+    private const val CATEGORY_LAUNCHER = "android.intent.category.LAUNCHER"
 
     private const val EXTRA_CAMERA_FACING = "android.intent.extras.CAMERA_FACING"
     private const val EXTRA_LENS_FACING_FRONT = "android.intent.extras.LENS_FACING_FRONT"
 
     private val PACKAGE_NAME = Regex("^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+$")
 
-    fun specFor(params: Params): LaunchSpec = LaunchSpec(
-        action = STILL_IMAGE_CAMERA_ACTION,
-        targetPackage = params.optString("package")?.let(::validatePackage),
-        newTask = true, // A service has no task of its own to launch into.
-        extras = lensExtras(params.optString("lens")),
-    )
+    /**
+     * Candidates in the order they should be attempted.
+     *
+     * Ordering rationale:
+     * 1. `STILL_IMAGE_CAMERA` — means precisely "open the camera app".
+     * 2. `MAIN` + `APP_CAMERA` — the category a launcher uses to find the camera; a plain launch,
+     *    very widely declared, and correct on builds that skip the action above.
+     * 3. `IMAGE_CAPTURE` — last, because it puts the app into "take one and return it" mode.
+     *    Started from a service with no result receiver, some camera apps sit on a confirm screen
+     *    with nowhere to return to. Fine as a fallback, wrong as a first choice.
+     * 4. `MAIN` + `LAUNCHER` — only when the caller named a package, as a last resort for an app
+     *    that declares none of the camera intents. Unscoped it would open the device's home screen.
+     */
+    fun candidatesFor(params: Params): List<LaunchSpec> {
+        val targetPackage = params.optString("package")?.let(::validatePackage)
+        val extras = lensExtras(params.optString("lens"))
+
+        fun spec(strategy: String, action: String, categories: Set<String> = emptySet()) = LaunchSpec(
+            action = action,
+            targetPackage = targetPackage,
+            newTask = true, // A service has no task of its own to launch into.
+            categories = categories,
+            extras = extras,
+            strategy = strategy,
+        )
+
+        return buildList {
+            add(spec("still_image_camera", STILL_IMAGE_CAMERA_ACTION))
+            add(spec("app_camera_category", MAIN_ACTION, setOf(CATEGORY_APP_CAMERA)))
+            add(spec("image_capture", IMAGE_CAPTURE_ACTION))
+            if (targetPackage != null) {
+                add(spec("launcher_entry", MAIN_ACTION, setOf(CATEGORY_LAUNCHER)))
+            }
+        }
+    }
 
     private fun lensExtras(lens: String?): Map<String, ExtraValue> {
         if (lens == null) return emptyMap()

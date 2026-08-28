@@ -16,11 +16,23 @@ import java.util.concurrent.TimeUnit
  * desktop JVM can test it.
  */
 class ExecGetPropReader(
-    private val binary: String = GETPROP_BINARY,
+    private val binaries: List<String> = DEFAULT_BINARIES,
     private val timeoutSeconds: Long = 5,
 ) : PropertyReader {
 
     override fun read(key: String): String? {
+        var lastFailure: Exception? = null
+        for (binary in binaries) {
+            try {
+                return read(binary, key)
+            } catch (e: Exception) {
+                lastFailure = e
+            }
+        }
+        throw lastFailure ?: IOException("No getprop binary configured")
+    }
+
+    private fun read(binary: String, key: String): String? {
         val process = ProcessBuilder(binary, key).start()
         try {
             // Drain stdout before waiting: a process whose output fills the pipe buffer blocks
@@ -39,6 +51,11 @@ class ExecGetPropReader(
     }
 
     private companion object {
-        const val GETPROP_BINARY = "/system/bin/getprop"
+        /**
+         * The absolute path first, since it is where every standard Android build puts it. The bare
+         * name is a fallback for unusual builds -- ProcessBuilder resolves it through PATH -- which
+         * costs nothing and saves a confusing failure on a custom ROM.
+         */
+        val DEFAULT_BINARIES = listOf("/system/bin/getprop", "getprop")
     }
 }

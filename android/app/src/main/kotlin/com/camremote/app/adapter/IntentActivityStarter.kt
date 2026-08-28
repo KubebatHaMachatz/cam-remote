@@ -33,6 +33,7 @@ class IntentActivityStarter(private val context: Context) : ActivityStarter {
     private fun LaunchSpec.toIntent(): Intent = Intent(action).also { intent ->
         targetPackage?.let(intent::setPackage)
         if (newTask) intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        categories.forEach(intent::addCategory)
         extras.forEach { (key, value) ->
             when (value) {
                 is ExtraValue.IntValue -> intent.putExtra(key, value.value)

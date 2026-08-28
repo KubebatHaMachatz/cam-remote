@@ -113,7 +113,7 @@ class RemoteControlService : LifecycleService() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(getString(R.string.notification_text, container.config.port))
-            .setSmallIcon(android.R.drawable.presence_video_online)
+            .setSmallIcon(R.drawable.ic_agent_notification)
             .setOngoing(true)
             .setContentIntent(
                 PendingIntent.getActivity(

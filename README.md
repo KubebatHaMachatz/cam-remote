@@ -164,6 +164,7 @@ See [docs/DESIGN.md](docs/DESIGN.md#testing) for why the split falls exactly the
 |---|---|
 | `discover` finds nothing | Many networks block multicast and guest networks isolate clients entirely. Read the address off the setup screen and pass `--host 10.0.0.x`. |
 | `PRECONDITION_FAILED` from `open-camera` | "Display over other apps" is not granted. Open the app and grant it. On ColorOS the Settings link opens the full app list rather than this app — scroll to cam-remote. |
+| `DEVICE_ERROR: no installed app handles any known camera intent` | The device has no camera app — common on bare AOSP images. `take-picture` still works; it drives the sensor directly. See [docs/DEVICES.md](docs/DEVICES.md). |
 | `PERMISSION_DENIED` from `take-picture` | The camera permission is missing. `camremote status` lists exactly what is missing. |
 | `TIMEOUT` from `take-picture` | Something else holds the camera — most often the camera app that `open-camera` just launched. Close it and retry. |
 | Stops answering when the screen is off | Grant "Ignore battery optimisation". Some OEM builds (Xiaomi, Huawei, realme) kill background services regardless of Android's own rules; on those, add cam-remote to the vendor's own protected-apps list. |
@@ -186,6 +187,7 @@ new transport rather than a new feature, and
 | [docs/DESIGN.md](docs/DESIGN.md) | Every significant decision and why it was made, including the ones rejected |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The layout of the code and the path a request takes through it |
 | [docs/EXTENDING.md](docs/EXTENDING.md) | Adding a command, adding a transport, swapping an implementation |
+| [docs/DEVICES.md](docs/DEVICES.md) | What varies between handsets, per-OEM notes, and how to diagnose a new one |
 
 ## Repository layout
 
