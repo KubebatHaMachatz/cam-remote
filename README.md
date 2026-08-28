@@ -48,9 +48,10 @@ ColorOS device this was built against turned out to be.
 
 ## Prerequisites
 
-**To build the agent:** JDK 17 or newer, and the Android SDK. Gradle arrives through the wrapper, and
-the build downloads the compile platform itself. Android Studio also works — open the `android/`
-directory.
+**To build the agent:** JDK 17 or newer, and the Android SDK with `ANDROID_HOME` set (Android Studio
+sets this up; otherwise point it at your SDK, or put `sdk.dir=…` in `android/local.properties`).
+Gradle arrives through the wrapper, and the build downloads the compile platform itself. Android
+Studio also works — open the `android/` directory.
 
 **To run the control application:** Python 3.11 or newer. Nothing else. No virtualenv, no `pip
 install`; `tomllib` and everything else it uses ship with Python.
