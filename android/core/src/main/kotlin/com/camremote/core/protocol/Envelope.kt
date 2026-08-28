@@ -1,5 +1,7 @@
 package com.camremote.core.protocol
 
+import kotlinx.serialization.EncodeDefault
+import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 
@@ -41,6 +43,7 @@ data class CommandError(
  * Field order here is the wire order; it is asserted in tests because the Python client and any
  * future client parse it independently.
  */
+@OptIn(ExperimentalSerializationApi::class)
 @Serializable
 data class CommandResponse(
     val id: String,
@@ -48,7 +51,9 @@ data class CommandResponse(
     val status: CommandStatus,
     val data: JsonObject? = null,
     val error: CommandError? = null,
-    val durationMs: Long = 0,
+    // Always on the wire, even when zero: a client should never have to distinguish "took no
+    // measurable time" from "this agent does not report timings".
+    @EncodeDefault(EncodeDefault.Mode.ALWAYS) val durationMs: Long = 0,
 ) {
     companion object {
         fun ok(

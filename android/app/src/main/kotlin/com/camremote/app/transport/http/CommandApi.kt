@@ -1,0 +1,147 @@
+package com.camremote.app.transport.http
+
+import com.camremote.core.command.CommandDispatcher
+import com.camremote.core.protocol.CommandError
+import com.camremote.core.protocol.DeviceDescription
+import com.camremote.core.protocol.ErrorCode
+import com.camremote.core.protocol.ErrorEnvelope
+import com.camremote.core.protocol.HealthResponse
+import com.camremote.core.protocol.MalformedRequestException
+import com.camremote.core.protocol.PairResponse
+import com.camremote.core.protocol.ProtocolJson
+import com.camremote.core.security.AccessControl
+import com.camremote.core.security.PairingWindow
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
+import io.ktor.http.HttpStatusCode
+import io.ktor.server.application.Application
+import io.ktor.server.application.ApplicationCall
+import io.ktor.server.application.install
+import io.ktor.server.plugins.statuspages.StatusPages
+import io.ktor.server.request.receiveText
+import io.ktor.server.response.respondText
+import io.ktor.server.routing.get
+import io.ktor.server.routing.post
+import io.ktor.server.routing.routing
+
+/**
+ * The HTTP adapter for the driving port.
+ *
+ * Everything here is Ktor and nothing here is Android, which is what lets these routes be exercised
+ * with `testApplication` on a desktop JVM. The adapter deliberately holds no policy: it decides
+ * which HTTP status expresses a failure and nothing else. Whether a command may run, how long it may
+ * take, and what it returns are all the dispatcher's business.
+ *
+ * Responses are serialised with [ProtocolJson] rather than Ktor's ContentNegotiation so that there
+ * is exactly one JSON configuration in the project, and the bytes on the wire are the ones the
+ * protocol tests assert.
+ */
+fun Application.commandApi(
+    dispatcher: CommandDispatcher,
+    accessControl: AccessControl,
+    pairingWindow: PairingWindow,
+    device: DeviceDescription,
+) {
+    install(StatusPages) {
+        status(HttpStatusCode.NotFound) { call, _ ->
+            call.respondError(
+                status = HttpStatusCode.NotFound,
+                code = ErrorCode.UNKNOWN_COMMAND,
+                message = "No such endpoint: ${call.request.local.uri}",
+                remediation = "Commands are sent as POST /v1/command; see system.commands for the catalog",
+            )
+        }
+        exception<Throwable> { call, cause ->
+            // The dispatcher already converts command failures into responses, so anything landing
+            // here is a defect in the adapter itself. Report it in the usual envelope rather than
+            // letting Ktor return an HTML error page a JSON client cannot read.
+            call.respondError(
+                status = HttpStatusCode.InternalServerError,
+                code = ErrorCode.INTERNAL,
+                message = "${cause::class.simpleName}: ${cause.message}",
+                remediation = "This is a defect in the agent; the device log has the stack trace",
+            )
+        }
+    }
+
+    routing {
+        get("/v1/health") {
+            call.respondJson(
+                HttpStatusCode.OK,
+                ProtocolJson.json.encodeToString(
+                    HealthResponse.serializer(),
+                    HealthResponse(device = device, pairingOpen = pairingWindow.isOpen()),
+                ),
+            )
+        }
+
+        post("/v1/pair") {
+            // Unauthenticated by necessity: this is how a client learns the token in the first
+            // place. The protection is that a human must have tapped Pair on the handset moments
+            // before, and that the window closes on first use.
+            val token = pairingWindow.claim()
+            if (token == null) {
+                call.respondError(
+                    status = HttpStatusCode.Forbidden,
+                    code = ErrorCode.UNAUTHORIZED,
+                    message = "No pairing window is open",
+                    remediation = "Open cam-remote on the device and tap Pair, then retry within a minute",
+                )
+            } else {
+                call.respondJson(
+                    HttpStatusCode.OK,
+                    ProtocolJson.json.encodeToString(
+                        PairResponse.serializer(),
+                        PairResponse(token = token, device = device),
+                    ),
+                )
+            }
+        }
+
+        post("/v1/command") {
+            if (!accessControl.isAuthorized(call.request.headers[HttpHeaders.Authorization])) {
+                call.respondError(
+                    status = HttpStatusCode.Unauthorized,
+                    code = ErrorCode.UNAUTHORIZED,
+                    message = "Missing or invalid bearer token",
+                    remediation = "Run 'camremote pair' after tapping Pair on the device",
+                )
+                return@post
+            }
+
+            val request = try {
+                ProtocolJson.decodeRequest(call.receiveText())
+            } catch (e: MalformedRequestException) {
+                call.respondError(
+                    status = HttpStatusCode.BadRequest,
+                    code = ErrorCode.INVALID_PARAMS,
+                    message = e.message ?: "Malformed request",
+                    remediation = "Send {\"id\":\"...\",\"command\":\"...\",\"params\":{...}}",
+                )
+                return@post
+            }
+
+            val response = dispatcher.dispatch(request)
+            call.respondJson(HttpStatusCode.OK, ProtocolJson.encodeResponse(response))
+        }
+    }
+}
+
+private suspend fun ApplicationCall.respondJson(status: HttpStatusCode, body: String) {
+    respondText(text = body, contentType = ContentType.Application.Json, status = status)
+}
+
+private suspend fun ApplicationCall.respondError(
+    status: HttpStatusCode,
+    code: ErrorCode,
+    message: String,
+    remediation: String? = null,
+) {
+    respondJson(
+        status,
+        ProtocolJson.json.encodeToString(
+            ErrorEnvelope.serializer(),
+            ErrorEnvelope(CommandError(code = code, message = message, remediation = remediation)),
+        ),
+    )
+}
