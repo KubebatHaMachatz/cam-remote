@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
  */
 class SetupActivity : AppCompatActivity() {
 
-    private val container by lazy { AppContainer(applicationContext) }
+    private val container by lazy { AppContainer.from(applicationContext) }
 
     private val requestPermissions =
         registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { render() }
@@ -95,6 +95,10 @@ class SetupActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        // The agent may have been killed by an app update, a process reclaim, or an OEM battery
+        // manager while the switch still says "on". Opening this screen repairs that rather than
+        // showing a switch that lies.
+        if (container.config.isEnabled) RemoteControlService.start(this)
         // Permissions are granted on other screens, so the state is re-read every time this one
         // comes back rather than tracked.
         render()

@@ -2,6 +2,7 @@ package com.camremote.app.di
 
 import android.content.Context
 import android.os.Build
+import android.os.Environment
 import androidx.lifecycle.LifecycleOwner
 import com.camremote.app.adapter.AndroidPermissionInspector
 import com.camremote.app.adapter.CameraXController
@@ -25,11 +26,11 @@ import com.camremote.core.port.CameraController
 import com.camremote.core.port.PermissionInspector
 import com.camremote.core.port.PhotoStore
 import com.camremote.core.port.SystemClock
+import com.camremote.core.protocol.CommandDescriptor
 import com.camremote.core.protocol.DeviceDescription
 import com.camremote.core.security.AccessControl
 import com.camremote.core.security.PairingWindow
 import java.io.File
-import android.os.Environment
 
 /**
  * Where every port is plugged into its adapter, and where the command catalog is declared.
@@ -43,8 +44,15 @@ import android.os.Environment
  * **Adding a command:** write the [Command] implementation in `:core`, then add one line to
  * [commands]. Nothing else in the project changes — not the transport, not the client, not the
  * protocol.
+ *
+ * The constructor is private and instances come from [from] because there must be exactly one per
+ * process. An earlier version let the setup screen and the service each build their own, which
+ * type-checked, unit-tested clean, and failed on the handset: the user tapped Pair, opening a
+ * pairing window on the activity's copy, while the HTTP server consulted its own copy and refused
+ * every request. State shared between an activity and a service has to be shared in fact, not by
+ * coincidence, so the shape that caused it is gone rather than merely fixed.
  */
-class AppContainer(private val context: Context) {
+class AppContainer private constructor(private val context: Context) {
 
     private val clock = SystemClock
 
@@ -113,7 +121,7 @@ class AppContainer(private val context: Context) {
      */
     private fun commands(
         camera: CameraController,
-        descriptors: () -> List<com.camremote.core.protocol.CommandDescriptor>,
+        descriptors: () -> List<CommandDescriptor>,
     ): List<Command> = listOf(
         PingCommand(clock),
         ListCommandsCommand(descriptors),
@@ -122,4 +130,15 @@ class AppContainer(private val context: Context) {
         OpenCameraCommand(IntentActivityStarter(context), permissions),
         CapturePhotoCommand(camera, photos, permissions, clock),
     )
+
+    companion object {
+        @Volatile
+        private var instance: AppContainer? = null
+
+        /** The process-wide container. Safe to call from any component or thread. */
+        fun from(context: Context): AppContainer =
+            instance ?: synchronized(this) {
+                instance ?: AppContainer(context.applicationContext).also { instance = it }
+            }
+    }
 }

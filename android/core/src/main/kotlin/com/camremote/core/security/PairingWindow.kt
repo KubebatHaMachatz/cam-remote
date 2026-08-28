@@ -19,6 +19,9 @@ class PairingWindow(
     private val tokens: TokenStore,
 ) {
 
+    // Opened from whichever thread the user interface runs on and read by transport worker
+    // threads, so the field is volatile rather than merely private.
+    @Volatile
     private var openedAtMillis: Long? = null
 
     /** Called when the user taps Pair on the device. Restarts the window if one is already open. */

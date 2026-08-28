@@ -41,7 +41,7 @@ class RemoteControlService : LifecycleService() {
 
     override fun onCreate() {
         super.onCreate()
-        container = AppContainer(applicationContext)
+        container = AppContainer.from(applicationContext)
         createNotificationChannel()
     }
 
