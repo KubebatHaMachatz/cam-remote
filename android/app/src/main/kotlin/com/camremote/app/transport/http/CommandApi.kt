@@ -1,6 +1,7 @@
 package com.camremote.app.transport.http
 
 import com.camremote.core.command.CommandDispatcher
+import com.camremote.core.port.PhotoStore
 import com.camremote.core.protocol.CommandError
 import com.camremote.core.protocol.DeviceDescription
 import com.camremote.core.protocol.ErrorCode
@@ -13,12 +14,15 @@ import com.camremote.core.security.AccessControl
 import com.camremote.core.security.PairingWindow
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
+import io.ktor.http.ContentDisposition
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
 import io.ktor.server.application.install
 import io.ktor.server.plugins.statuspages.StatusPages
 import io.ktor.server.request.receiveText
+import io.ktor.server.response.header
+import io.ktor.server.response.respondOutputStream
 import io.ktor.server.response.respondText
 import io.ktor.server.routing.get
 import io.ktor.server.routing.post
@@ -40,6 +44,7 @@ fun Application.commandApi(
     dispatcher: CommandDispatcher,
     accessControl: AccessControl,
     pairingWindow: PairingWindow,
+    photos: PhotoStore,
     device: DeviceDescription,
 ) {
     install(StatusPages) {
@@ -95,6 +100,46 @@ fun Application.commandApi(
                         PairResponse(token = token, device = device),
                     ),
                 )
+            }
+        }
+
+        get("/v1/media/{id}") {
+            if (!accessControl.isAuthorized(call.request.headers[HttpHeaders.Authorization])) {
+                call.respondError(
+                    status = HttpStatusCode.Unauthorized,
+                    code = ErrorCode.UNAUTHORIZED,
+                    message = "Missing or invalid bearer token",
+                    remediation = "Run 'camremote pair' after tapping Pair on the device",
+                )
+                return@get
+            }
+
+            val opened = photos.open(call.parameters["id"].orEmpty())
+            if (opened == null) {
+                call.respondError(
+                    status = HttpStatusCode.NotFound,
+                    code = ErrorCode.DEVICE_ERROR,
+                    message = "No photo with that id is available on this device",
+                    remediation = "Take a photo with camera.capture and use the id it returns",
+                )
+                return@get
+            }
+
+            val filename = opened.photo.path.substringAfterLast('/')
+            call.response.header(
+                HttpHeaders.ContentDisposition,
+                ContentDisposition.Attachment
+                    .withParameter(ContentDisposition.Parameters.FileName, filename)
+                    .toString(),
+            )
+            // Streamed rather than read into memory: a full-resolution JPEG is several megabytes
+            // and the agent shares a heap with whatever else the phone is doing.
+            call.respondOutputStream(
+                contentType = ContentType.parse(opened.contentType),
+                status = HttpStatusCode.OK,
+                contentLength = opened.photo.sizeBytes,
+            ) {
+                opened.stream.use { it.copyTo(this) }
             }
         }
 
