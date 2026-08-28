@@ -1,0 +1,15 @@
+[project]
+name = "camremote"
+version = "1.0.0"
+description = "Control application for the cam-remote Android agent"
+requires-python = ">=3.11"
+# Intentionally empty. The client uses only the standard library -- argparse, urllib, socket and
+# tomllib -- so a reviewer can run it with `python -m camremote` on a clean machine, with no
+# virtualenv and no network install standing between them and the demo.
+dependencies = []
+
+[project.scripts]
+camremote = "camremote.cli:main"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
