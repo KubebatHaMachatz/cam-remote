@@ -189,6 +189,13 @@ The agent listens on the local network, so the threat model is "somebody else on
 
 - **A bearer token on every request**, generated on first run — not baked into the build, so two
   installs of the same APK do not share a secret. The comparison is constant-time and length-safe.
+- **The token is four characters, deliberately.** This is a proof of concept, and a token that short
+  can be read off the phone's screen and typed in a second, which makes the manual fallback to
+  pairing genuinely usable. The cost is not hidden: four characters from a 32-symbol alphabet is
+  about a million possibilities, which anyone on the same network can exhaust in well under a minute.
+  It keeps a neighbour from stumbling onto the port; it does not keep out anyone who wants in. The
+  alphabet omits `O`/`0` and `I`/`1` so it survives being copied by eye. Restoring a serious secret is
+  one constant — `Tokens.LENGTH` — because nothing else in the project depends on the length.
 - **Pairing is a deliberate act.** With no adb there has to be some in-band way to hand over the
   token, so the user taps **Pair**, which opens a sixty-second window that closes after one claim.
   Someone on the same network can only pair if they are also holding the phone at that moment.

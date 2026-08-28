@@ -99,7 +99,12 @@ Token saved to /Users/you/.camremote.toml
 
 The token is written with `0600` permissions and used for every later request. If you would rather
 not run pairing, the token is also printed on the setup screen and can be passed as `--token` or
-`CAMREMOTE_TOKEN`.
+`CAMREMOTE_TOKEN` — it is four characters, so typing it is no hardship.
+
+> **That short token is a proof-of-concept choice, not a production one.** Four characters is
+> guessable by anyone on the same network in under a minute, so do not leave this build running on a
+> network you do not trust. Lengthening it is one constant, `Tokens.LENGTH`; the reasoning is in
+> [docs/DESIGN.md](docs/DESIGN.md#7-security).
 
 `scripts/camremote` is a two-line wrapper that puts the package on the import path. `cd python &&
 python3 -m camremote …` is exactly equivalent, and `pip install ./python` gives you a `camremote`
