@@ -1,0 +1,22 @@
+# Gradle / Android
+android/.gradle/
+android/build/
+android/*/build/
+android/local.properties
+android/.kotlin/
+*.apk
+*.aab
+*.iml
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.egg-info/
+.venv/
+venv/
+
+# Local artefacts
+shots/
+.DS_Store
