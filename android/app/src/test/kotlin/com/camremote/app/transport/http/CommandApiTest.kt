@@ -4,6 +4,9 @@ import com.camremote.core.command.CommandDispatcher
 import com.camremote.core.command.CommandOutcome
 import com.camremote.core.command.CommandRegistry
 import com.camremote.core.protocol.CommandStatus
+import com.camremote.core.port.OpenPhoto
+import com.camremote.core.port.PhotoStore
+import com.camremote.core.port.StoredPhoto
 import com.camremote.core.protocol.DeviceDescription
 import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.ProtocolJson
@@ -61,8 +64,17 @@ class CommandApiTest {
             ),
             accessControl = AccessControl { token },
             pairingWindow = pairing,
+            photos = noPhotos,
             device = device,
         )
+    }
+
+    /** The media route has its own test; here it only has to exist. */
+    private val noPhotos = object : PhotoStore {
+        override fun destinationFor(directory: String?, filename: String) = "/unused"
+        override fun record(path: String, capturedAtMillis: Long): StoredPhoto = error("not used here")
+        override fun publish(photo: StoredPhoto): String? = null
+        override fun open(id: String): OpenPhoto? = null
     }
 
     @Test
@@ -134,6 +146,7 @@ class CommandApiTest {
                 ),
                 accessControl = AccessControl { token },
                 pairingWindow = pairing,
+                photos = noPhotos,
                 device = device,
             )
         }
