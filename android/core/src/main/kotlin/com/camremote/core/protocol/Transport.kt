@@ -55,3 +55,30 @@ data class PairResponse(
  */
 @Serializable
 data class ErrorEnvelope(val error: CommandError)
+
+/**
+ * The device-side grants the agent needs, and whether they are in place.
+ *
+ * Part of the wire format because `system.status` returns it: when something is not working, the
+ * first question is always which of these is missing, and answering it remotely saves a trip to the
+ * handset.
+ */
+@Serializable
+data class PermissionStatus(
+    /** Required to capture a photo at all. */
+    val camera: Boolean,
+    /** Required to show the foreground-service notification on API 33+. */
+    val notifications: Boolean,
+    /**
+     * "Display over other apps". Required twice over: Android blocks background activity launches
+     * without it, and it is also an exemption from the rule that a camera-type foreground service
+     * cannot be started from the background.
+     */
+    val canDrawOverlays: Boolean,
+    /** Without this, Doze can drop inbound connections once the screen has been off a while. */
+    val ignoringBatteryOptimizations: Boolean,
+) {
+    /** True when nothing stands in the way of the full command set. */
+    val isComplete: Boolean
+        get() = camera && notifications && canDrawOverlays && ignoringBatteryOptimizations
+}

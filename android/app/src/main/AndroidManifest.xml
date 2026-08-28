@@ -9,6 +9,23 @@
 
     <uses-permission android:name="android.permission.CAMERA" />
 
+    <!-- Needed so a background service may start the camera app at all, and as the documented
+         exemption from the API 34+ rule against starting a camera-type foreground service from
+         the background. The user grants it once during setup. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
+
+    <uses-feature android:name="android.hardware.camera.any" android:required="false" />
+
+    <!-- API 30+ package visibility: without this, resolveActivity cannot see the camera app and
+         camera.open would report "no camera app installed" on every modern device. -->
+    <queries>
+        <intent>
+            <action android:name="android.media.action.STILL_IMAGE_CAMERA" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="false"
         android:label="@string/app_name"
