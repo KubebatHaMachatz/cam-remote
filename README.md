@@ -34,8 +34,8 @@ That output is real, from a Realme RMX3563 running Android 14 (API 34).
 | 3. Fetch device property data | `camremote getprop KEY...` | Reads any number of properties in one round trip |
 | 4. Control application | `camremote` | Pure standard library; nothing to install |
 
-Plus `discover`, `pair`, `status`, `commands` and `system-ping` for finding, authorising and
-inspecting an agent.
+Plus `discover`, `pair`, `status`, `commands`, `camera-apps`, `device-report` and `system-ping`
+for finding, authorising, inspecting and surveying an agent.
 
 ## No adb
 
@@ -122,6 +122,8 @@ camremote open-camera --lens front      # best-effort hint; camera apps may igno
 camremote take-picture --out ./shots    # capture and download
 camremote take-picture --filename door --quality 80 --gallery
 camremote take-picture --no-download    # leave it on the device
+camremote camera-apps                   # every camera app, and which one open-camera would use
+camremote device-report --out d.json    # everything about a device, for a compatibility matrix
 ```
 
 Global options: `--host`, `--port`, `--token`, `--timeout`, `--config`, and `--json` for machine-
@@ -141,8 +143,8 @@ Exit codes, for scripting:
 ## Tests
 
 ```bash
-cd android && ./gradlew :core:test :app:testDebugUnitTest   # 168 unit tests
-cd python  && python3 -m unittest discover -s tests -t .    # 65 unit tests
+cd android && ./gradlew :core:test :app:testDebugUnitTest   # 175 unit tests
+cd python  && python3 -m unittest discover -s tests -t .    # 72 unit tests
 ```
 
 Both suites run on a desktop with no device attached and no packages installed. The Python tests use

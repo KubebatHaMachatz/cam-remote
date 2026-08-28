@@ -96,6 +96,38 @@ def _megabytes(size: int | None) -> str:
     return f"{size / 1_000_000:.2f} MB"
 
 
+def _apps(context: Context) -> int:
+    response = context.agent.invoke("camera.apps")
+    data = response.data
+
+    chosen = data.get("wouldUseComponent")
+    lines = [
+        f"camera.open would use: {data.get('wouldUseStrategy')} -> {chosen}"
+        if chosen
+        else "camera.open would find nothing - this device has no camera app"
+    ]
+    for strategy in data.get("strategies", []):
+        handlers = strategy.get("handlers", [])
+        lines.append(f"{strategy['strategy']} ({strategy.get('action')}): {len(handlers)} handler(s)")
+        for handler in handlers:
+            marks = []
+            if handler.get("preinstalled"):
+                marks.append("preinstalled")
+            if handler.get("userDefault"):
+                marks.append("user default")
+            suffix = f"  [{', '.join(marks)}]" if marks else ""
+            lines.append(f"    {handler['package']}/{handler['activity']}{suffix}")
+
+    context.emit(data, *lines)
+    return 0
+
+
+CAMERA_APPS = CliCommand(
+    name="camera-apps",
+    help="List the camera apps this device offers and which one camera.open would use.",
+    run=_apps,
+)
+
 OPEN_CAMERA = CliCommand(
     name="open-camera",
     help="Open the camera app on the device.",

@@ -21,7 +21,28 @@ data class LaunchSpec(
      * difference between "it works everywhere" and understanding why.
      */
     val strategy: String = "default",
+    /**
+     * An explicit `package/activity` to launch, rather than letting the system choose.
+     *
+     * Set once the agent has picked from the available handlers, so a device with two camera apps
+     * and no default cannot put a chooser dialog in front of nobody.
+     */
+    val component: String? = null,
 )
+
+/**
+ * An activity that can handle a [LaunchSpec], and the two facts needed to choose between several.
+ */
+data class ResolvedActivity(
+    val packageName: String,
+    val activityName: String,
+    /** Preinstalled on the system image, as opposed to sideloaded. */
+    val isSystem: Boolean = false,
+    /** The user's chosen default handler for this intent. */
+    val isDefault: Boolean = false,
+) {
+    val component: String get() = "$packageName/$activityName"
+}
 
 /** The handful of intent-extra types this project needs, modelled without Android's Bundle. */
 sealed interface ExtraValue {
@@ -34,11 +55,14 @@ sealed interface ExtraValue {
 interface ActivityStarter {
 
     /**
-     * The component that would handle [spec], or null when nothing on the device can.
+     * Every activity that can handle [spec], newest-registered order as the platform reports it.
      *
-     * Resolving first turns "nothing happened" into a specific, reportable failure.
+     * All of them rather than just the best one, because choosing is a decision worth testing and
+     * because listing them is what makes a new device's behaviour explicable from the control
+     * machine. Empty means nothing on the device handles it, which is a specific, reportable failure
+     * rather than a silent nothing-happened.
      */
-    fun resolve(spec: LaunchSpec): String?
+    fun resolveAll(spec: LaunchSpec): List<ResolvedActivity>
 
     /** @throws Exception when the platform refuses the launch. */
     fun start(spec: LaunchSpec)

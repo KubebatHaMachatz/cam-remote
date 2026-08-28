@@ -3,6 +3,7 @@ package com.camremote.core.command.impl
 import com.camremote.core.command.Command
 import com.camremote.core.command.CommandOutcome
 import com.camremote.core.command.DeviceResource
+import com.camremote.core.logic.CameraAppChoice
 import com.camremote.core.logic.CameraAppLaunch
 import com.camremote.core.port.ActivityStarter
 import com.camremote.core.port.PermissionInspector
@@ -29,6 +30,10 @@ import kotlinx.serialization.json.buildJsonObject
  * [CameraAppLaunch]'s ordered candidates, skipping those nothing handles and those the platform
  * refuses to start, and reports which one succeeded so a device's quirks can be diagnosed from the
  * control machine rather than by picking the handset up.
+ *
+ * Each candidate is launched by explicit component, chosen by [CameraAppChoice] from every handler
+ * the device offers. Letting the platform choose would, on a device with two camera apps and no
+ * default, produce a chooser dialog in front of nobody.
  */
 class OpenCameraCommand(
     private val activities: ActivityStarter,
@@ -75,19 +80,21 @@ class OpenCameraCommand(
         var lastFailure: Exception? = null
 
         for (spec in candidates) {
-            // Resolving proves an activity exists; it does not prove this app may launch it, so a
-            // start that throws falls through to the next candidate rather than ending the attempt.
-            val component = activities.resolve(spec) ?: continue
+            val chosen = CameraAppChoice.pick(activities.resolveAll(spec)) ?: continue
             resolvedAny = true
             try {
-                activities.start(spec)
+                // Resolving proves an activity exists; it does not prove this app may launch it, so
+                // a start that throws falls through to the next candidate rather than ending here.
+                activities.start(spec.copy(component = chosen.component))
                 return CommandOutcome.Success(
                     buildJsonObject {
                         put("launched", JsonPrimitive(true))
-                        put("component", JsonPrimitive(component))
+                        put("component", JsonPrimitive(chosen.component))
+                        put("package", JsonPrimitive(chosen.packageName))
+                        put("preinstalled", JsonPrimitive(chosen.isSystem))
+                        put("userDefault", JsonPrimitive(chosen.isDefault))
                         put("strategy", JsonPrimitive(spec.strategy))
                         put("action", JsonPrimitive(spec.action))
-                        spec.targetPackage?.let { put("package", JsonPrimitive(it)) }
                     },
                 )
             } catch (e: Exception) {

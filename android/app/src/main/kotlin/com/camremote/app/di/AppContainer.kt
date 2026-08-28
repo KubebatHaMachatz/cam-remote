@@ -17,6 +17,7 @@ import com.camremote.core.command.CommandDispatcher
 import com.camremote.core.command.CommandRegistry
 import com.camremote.core.command.impl.CapturePhotoCommand
 import com.camremote.core.command.impl.GetPropCommand
+import com.camremote.core.command.impl.ListCameraAppsCommand
 import com.camremote.core.command.impl.ListCommandsCommand
 import com.camremote.core.command.impl.OpenCameraCommand
 import com.camremote.core.command.impl.PingCommand
@@ -128,6 +129,7 @@ class AppContainer private constructor(private val context: Context) {
         StatusCommand(permissions, ::deviceDescription, camera, clock),
         GetPropCommand(properties),
         OpenCameraCommand(IntentActivityStarter(context), permissions),
+        ListCameraAppsCommand(IntentActivityStarter(context)),
         CapturePhotoCommand(camera, photos, permissions, clock),
     )
 

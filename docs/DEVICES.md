@@ -18,6 +18,42 @@ things vary, and all three are handled rather than assumed:
 another app for a favour, which is why the assignment's rear-camera requirement is the *most*
 portable part of the project rather than the least.
 
+## Finding the right camera package
+
+**There is no property for it.** Vendors ship plenty of camera-related properties —
+`persist.vendor.camera.*` and similar — but they configure the camera HAL, not the app, and none of
+them is a contract across manufacturers. `getprop` will tell you the manufacturer and the build
+fingerprint; it will not tell you which package to launch.
+
+**`PackageManager` intent resolution is the mechanism Android actually provides**, and it is what
+the agent uses. One subtlety is worth knowing, because the obvious implementation gets it wrong:
+
+`PackageManager.resolveActivity` looks like the right call and is not. On a device with **two**
+camera apps and no user default — a Samsung with both the OEM camera and something sideloaded, say —
+it returns `com.android.internal.app.ResolverActivity`, the system chooser. Launching that from a
+headless agent puts a "which app?" dialog on a screen nobody is watching, and the command reports
+success.
+
+So the agent instead:
+
+1. calls `queryIntentActivities` to get **every** handler,
+2. picks one in `CameraAppChoice` — user default first, then a preinstalled app, then a stable
+   tie-break so repeated runs behave identically,
+3. and launches it **by explicit component**, which no chooser can intercept.
+
+`camremote camera-apps` shows the whole picture for any device:
+
+```
+camera.open would use: still_image_camera -> com.sec.android.app.camera/.Camera
+still_image_camera (android.media.action.STILL_IMAGE_CAMERA): 2 handler(s)
+    com.sec.android.app.camera/.Camera  [preinstalled]
+    com.example.opencamera/.MainActivity
+```
+
+A hard-coded table of OEM package names would be the other approach. It is worse: it needs updating
+for every new device and every vendor rename, and it cannot see a camera app it has never heard of.
+The `--package` parameter exists for the rare case where you want to override the choice by hand.
+
 ## The camera-app chain
 
 `camera.open` tries these in order, stopping at the first that both resolves and starts:
@@ -104,21 +140,33 @@ Everything works. Three quirks worth knowing:
 
 ## Diagnosing a new device
 
-In order, from the control machine:
+Start with one command, which gathers everything and keeps going even when part of the device is
+broken:
+
+```bash
+camremote device-report --out matrix/samsung-s24.json
+```
+
+It reports the device and build, every permission that is missing, every camera app present and
+which one `camera.open` would pick, and the command catalog. A section that fails — `camera.apps`
+with the camera permission missing, say — is recorded as an error inside the report rather than
+ending it, because a diagnostic that only runs on healthy devices is not much use.
+
+Then, if something specific needs pinning down:
 
 ```bash
 camremote discover              # if silent, the network blocks multicast -- use --host
 camremote status                # names every missing permission
+camremote camera-apps           # every camera app, and which one would be chosen
 camremote --json open-camera    # 'strategy' says which intent the device answered
 camremote take-picture          # independent of the camera app entirely
 ```
 
-`system.status` is the fastest way to tell a permissions problem from a portability one, and it is
-answerable remotely, which matters when the phone is on someone else's desk.
-
 ## Adding a device to the matrix
 
 Worth recording, because it is the sort of thing that is expensive to rediscover:
+
+Run `camremote device-report --out matrix/<device>.json` on each new handset and add a row:
 
 | Device | Android | Camera package | Strategy that worked | Notes |
 |---|---|---|---|---|
