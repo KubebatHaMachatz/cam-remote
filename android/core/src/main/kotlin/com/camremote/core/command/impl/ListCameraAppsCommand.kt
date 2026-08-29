@@ -52,7 +52,7 @@ class ListCameraAppsCommand(private val activities: ActivityStarter) : Command {
                                             put("package", JsonPrimitive(handler.packageName))
                                             put("activity", JsonPrimitive(handler.activityName))
                                             put("preinstalled", JsonPrimitive(handler.isSystem))
-                                            put("userDefault", JsonPrimitive(handler.isDefault))
+                                            put("defaultHandler", JsonPrimitive(handler.isDefault))
                                         },
                                     )
                                 }

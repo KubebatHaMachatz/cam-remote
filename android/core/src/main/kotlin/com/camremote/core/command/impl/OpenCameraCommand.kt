@@ -92,7 +92,7 @@ class OpenCameraCommand(
                         put("component", JsonPrimitive(chosen.component))
                         put("package", JsonPrimitive(chosen.packageName))
                         put("preinstalled", JsonPrimitive(chosen.isSystem))
-                        put("userDefault", JsonPrimitive(chosen.isDefault))
+                        put("defaultHandler", JsonPrimitive(chosen.isDefault))
                         put("strategy", JsonPrimitive(spec.strategy))
                         put("action", JsonPrimitive(spec.action))
                     },

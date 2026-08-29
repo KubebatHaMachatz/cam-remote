@@ -37,18 +37,23 @@ success.
 So the agent instead:
 
 1. calls `queryIntentActivities` to get **every** handler,
-2. picks one in `CameraAppChoice` — user default first, then a preinstalled app, then a stable
-   tie-break so repeated runs behave identically,
+2. picks one in `CameraAppChoice` — the registered default first, then a preinstalled app, then a
+   stable alphabetical tie-break so repeated runs behave identically,
 3. and launches it **by explicit component**, which no chooser can intercept.
 
 `camremote camera-apps` shows the whole picture for any device:
 
 ```
-camera.open would use: still_image_camera -> com.sec.android.app.camera/.Camera
-still_image_camera (android.media.action.STILL_IMAGE_CAMERA): 2 handler(s)
-    com.sec.android.app.camera/.Camera  [preinstalled]
-    com.example.opencamera/.MainActivity
+camera.open would use: still_image_camera -> com.sec.android.app.camera/…AssistantActionActivity
+still_image_camera (android.media.action.STILL_IMAGE_CAMERA): 1 handler(s)
+    com.sec.android.app.camera/…AssistantActionActivity  [preinstalled, default handler]
+app_camera_category (android.intent.action.MAIN): 0 handler(s)
+image_capture (android.media.action.IMAGE_CAPTURE): 1 handler(s)
+    com.sec.android.app.camera/com.sec.android.app.camera.Camera  [preinstalled, default handler]
 ```
+
+"default handler" means the platform resolves the intent to it — which is the user's choice when
+several apps compete, and simply "the only one" when one does. It does not imply anyone picked it.
 
 A hard-coded table of OEM package names would be the other approach. It is worse: it needs updating
 for every new device and every vendor rename, and it cannot see a camera app it has never heard of.
@@ -61,7 +66,7 @@ The `--package` parameter exists for the rare case where you want to override th
 | Strategy | Intent | Notes |
 |---|---|---|
 | `still_image_camera` | `android.media.action.STILL_IMAGE_CAMERA` | Means precisely "open the camera app". What ColorOS answers. |
-| `app_camera_category` | `MAIN` + `android.intent.category.APP_CAMERA` | The category a launcher uses to find the camera. Very widely declared. |
+| `app_camera_category` | `MAIN` + `android.intent.category.APP_CAMERA` | The category a launcher uses to find the camera. Widely declared — but **not** by One UI, which returns zero handlers for it. |
 | `image_capture` | `android.media.action.IMAGE_CAPTURE` | Last: it opens the app in "take one and return it" mode, and started from a service there is nowhere to return to. |
 | `launcher_entry` | `MAIN` + `LAUNCHER` | Only when `--package` names an app, as a last resort. |
 
@@ -90,17 +95,31 @@ Everything works. Three quirks worth knowing:
 - ColorOS's battery manager is aggressive. Grant the battery exemption, and add cam-remote to
   *Settings → Battery → Background power consumption* if it still gets killed overnight.
 
-### Samsung (One UI) — expected
+### Samsung (One UI) — verified on SM-S921B (Galaxy S24), Android 14
 
-- **Camera app:** `com.sec.android.app.camera`. It declares `STILL_IMAGE_CAMERA`, so the first
-  strategy should hit.
+Everything works. Three findings, two of them surprising:
+
+- **`adb shell pm grant` and `appops set` are allowed**, unlike ColorOS. Setup on a Samsung can be
+  scripted end to end, which makes it much the fastest device to iterate on.
+- **`MAIN` + `CATEGORY_APP_CAMERA` returns zero handlers.** One UI simply does not declare that
+  category, so a project relying on it alone would report "no camera app" on a flagship Samsung.
+  This is the clearest argument for the strategy chain existing at all.
+- **`STILL_IMAGE_CAMERA` resolves to `AssistantActionActivity`**, not to the obvious `.Camera`:
+
+  ```
+  still_image_camera: com.sec.android.app.camera/…executor.AssistantActionActivity  [preinstalled]
+  image_capture:      com.sec.android.app.camera/com.sec.android.app.camera.Camera  [preinstalled]
+  ```
+
+  That looks wrong and is not — it is a Bixby trampoline that forwards immediately to
+  `com.sec.android.app.camera/.Camera`, which is what ends up on screen. Worth knowing before
+  someone reads the component name in a log and files a bug.
 - **Sleeping apps.** One UI's *Settings → Battery → Background usage limits* has "Sleeping apps" and
   "Deep sleeping apps" lists that will stop the agent regardless of Android's own rules. Add
-  cam-remote to "Never sleeping apps". The battery-optimisation exemption alone is not enough on One
-  UI.
-- Knox-managed devices may block the overlay permission by policy; on those, `camera.capture`,
-  `device.getprop` and `system.status` still work, and `camera.open` reports
-  `PRECONDITION_FAILED` accurately.
+  cam-remote to "Never sleeping apps"; the battery-optimisation exemption alone is not enough here.
+- Knox-managed devices may block the overlay permission by policy. On those, `camera.capture`,
+  `device.getprop` and `system.status` still work, and `camera.open` reports `PRECONDITION_FAILED`
+  accurately.
 
 ### Pixel / stock Android
 
@@ -138,6 +157,14 @@ Everything works. Three quirks worth knowing:
 - Google APIs images allow `adb shell pm grant`, which makes emulator setup much quicker than on a
   retail handset.
 
+## A note on running the instrumented tests
+
+`./gradlew :app:connectedDebugAndroidTest` reinstalls the app, which stops a running agent — so the
+device goes quiet until the agent is started again. Opening cam-remote on the handset restarts it
+(the setup screen repairs an agent the system has killed), and so does a reboot. Pass
+`-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true` to keep the APKs, and their granted
+permissions, in place between runs.
+
 ## Diagnosing a new device
 
 Start with one command, which gathers everything and keeps going even when part of the device is
@@ -168,6 +195,7 @@ Worth recording, because it is the sort of thing that is expensive to rediscover
 
 Run `camremote device-report --out matrix/<device>.json` on each new handset and add a row:
 
-| Device | Android | Camera package | Strategy that worked | Notes |
-|---|---|---|---|---|
-| realme RMX3563 | 14 (API 34) | `com.oplus.camera` | `still_image_camera` | `pm grant` blocked; overlay deep link ignored |
+| Device | Android | Camera package | Strategy that worked | Capture | Notes |
+|---|---|---|---|---|---|
+| realme RMX3563 (ColorOS) | 14 (API 34) | `com.oplus.camera` | `still_image_camera` | 2448×3264 | `pm grant` blocked; overlay deep link ignored |
+| samsung SM-S921B (One UI) | 14 (API 34) | `com.sec.android.app.camera` | `still_image_camera` | 4080×3060 | `pm grant` allowed; `APP_CAMERA` category unhandled; Bixby trampoline activity |

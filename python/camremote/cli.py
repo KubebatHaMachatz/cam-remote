@@ -41,6 +41,9 @@ EXIT_UNREACHABLE = 3
 
 DISCOVERY_TIMEOUT_SECONDS = 3.0
 
+#: Shorter, because this runs on an error path where the answer is already bad news.
+SUGGESTION_TIMEOUT_SECONDS = 1.5
+
 
 class _Parser(argparse.ArgumentParser):
     """An argparse parser that reports usage errors instead of killing the process.
@@ -148,7 +151,14 @@ def main(
         if error.remediation:
             print(f"  try: {error.remediation}", file=err)
         return EXIT_COMMAND_FAILED
-    except (TransportError, NoAgentFound) as error:
+    except TransportError as error:
+        print(f"error: {error}", file=err)
+        # Whatever was configured is not answering, so say what is -- the common case when a second
+        # handset joins the bench and the saved config still names the first.
+        for line in _other_agents_on_the_network(finder):
+            print(line, file=err)
+        return EXIT_UNREACHABLE
+    except NoAgentFound as error:
         print(f"error: {error}", file=err)
         return EXIT_UNREACHABLE
     except CamRemoteError as error:
@@ -157,6 +167,20 @@ def main(
     except KeyboardInterrupt:
         print("interrupted", file=err)
         return EXIT_COMMAND_FAILED
+
+
+def _other_agents_on_the_network(finder: Callable[[float], Sequence]) -> list[str]:
+    """Suggestions for an unreachable agent, or nothing at all when there are none.
+
+    Deliberately a suggestion rather than a silent fallback: quietly redirecting a `take-picture` to
+    whichever phone happened to answer would be a memorable way to photograph the wrong room.
+    """
+    agents = list(finder(SUGGESTION_TIMEOUT_SECONDS))
+    if not agents:
+        return []
+    return ["  Found these agents on the network:"] + [
+        f"    {agent.describe()}  ->  --host {agent.host}" for agent in agents
+    ]
 
 
 def _locate_agent(

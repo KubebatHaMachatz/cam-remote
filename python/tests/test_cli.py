@@ -136,6 +136,31 @@ class FailureTest(CliTestCase):
         self.assertEqual(3, code)
         self.assertIn("Could not reach", self.err.getvalue())
 
+    def test_an_unreachable_agent_points_at_what_is_actually_on_the_network(self):
+        # The failure this exists to prevent: testing a second handset, the saved config still names
+        # the first, and the error says only "connection refused" while the new device sits there
+        # answering mDNS.
+        client = FakeClient(raises=TransportError("Could not reach the agent at 10.0.0.4:8099"))
+        agent = DiscoveredAgent(
+            instance="cam-remote SM-S921B",
+            host="10.0.0.8",
+            port=8099,
+            attributes={"model": "SM-S921B"},
+        )
+
+        code = self.run_cli("system-ping", client=client, agents=[agent])
+
+        self.assertEqual(3, code)
+        self.assertIn("10.0.0.8:8099", self.err.getvalue())
+        self.assertIn("--host", self.err.getvalue())
+
+    def test_does_not_invent_suggestions_when_the_network_is_empty(self):
+        client = FakeClient(raises=TransportError("Could not reach the agent at 10.0.0.4:8099"))
+
+        self.run_cli("system-ping", client=client, agents=[])
+
+        self.assertNotIn("Found these", self.err.getvalue())
+
     def test_a_rejected_token_exits_one(self):
         client = FakeClient(raises=AuthenticationError("Missing or invalid bearer token"))
 
@@ -357,7 +382,7 @@ class DeviceReportTest(CliTestCase):
                                 "package": "com.sec.android.app.camera",
                                 "activity": ".Camera",
                                 "preinstalled": True,
-                                "userDefault": False,
+                                "defaultHandler": False,
                             }
                         ],
                     }
@@ -455,7 +480,7 @@ class CameraAppsTest(CliTestCase):
                                     "package": "com.android.camera2",
                                     "activity": ".CameraActivity",
                                     "preinstalled": True,
-                                    "userDefault": False,
+                                    "defaultHandler": False,
                                 }
                             ],
                         }

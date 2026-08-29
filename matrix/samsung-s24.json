@@ -1,0 +1,167 @@
+{
+  "agent": {
+    "baseUrl": "http://10.0.0.8:8099"
+  },
+  "status": {
+    "device": {
+      "name": "e1s",
+      "model": "samsung SM-S921B",
+      "androidRelease": "14",
+      "apiLevel": 34
+    },
+    "permissions": {
+      "camera": true,
+      "notifications": true,
+      "canDrawOverlays": true,
+      "ignoringBatteryOptimizations": true
+    },
+    "hasRearCamera": true,
+    "setupComplete": true,
+    "missing": [],
+    "deviceTimeMillis": 1788023117359
+  },
+  "cameraApps": {
+    "strategies": [
+      {
+        "strategy": "still_image_camera",
+        "action": "android.media.action.STILL_IMAGE_CAMERA",
+        "chosen": "com.sec.android.app.camera/com.sec.android.app.camera.executor.AssistantActionActivity",
+        "handlers": [
+          {
+            "package": "com.sec.android.app.camera",
+            "activity": "com.sec.android.app.camera.executor.AssistantActionActivity",
+            "preinstalled": true,
+            "userDefault": true
+          }
+        ]
+      },
+      {
+        "strategy": "app_camera_category",
+        "action": "android.intent.action.MAIN",
+        "chosen": null,
+        "handlers": []
+      },
+      {
+        "strategy": "image_capture",
+        "action": "android.media.action.IMAGE_CAPTURE",
+        "chosen": "com.sec.android.app.camera/com.sec.android.app.camera.Camera",
+        "handlers": [
+          {
+            "package": "com.sec.android.app.camera",
+            "activity": "com.sec.android.app.camera.Camera",
+            "preinstalled": true,
+            "userDefault": true
+          }
+        ]
+      }
+    ],
+    "wouldUseStrategy": "still_image_camera",
+    "wouldUseComponent": "com.sec.android.app.camera/com.sec.android.app.camera.executor.AssistantActionActivity"
+  },
+  "properties": {
+    "properties": {
+      "ro.product.manufacturer": "samsung",
+      "ro.product.brand": "samsung",
+      "ro.product.model": "SM-S921B",
+      "ro.product.device": "e1s",
+      "ro.product.name": "e1sxxx",
+      "ro.build.version.release": "14",
+      "ro.build.version.sdk": "34",
+      "ro.build.version.security_patch": "2024-03-01",
+      "ro.build.type": "user",
+      "ro.build.tags": "release-keys",
+      "ro.build.fingerprint": "samsung/e1sxxx/e1s:14/UP1A.231005.007/S921BXXS1AXBG:user/release-keys",
+      "ro.hardware": "s5e9945",
+      "ro.board.platform": "erd9945",
+      "ro.product.cpu.abi": "arm64-v8a"
+    }
+  },
+  "commands": {
+    "commands": [
+      {
+        "name": "camera.apps",
+        "description": "List the camera apps this device offers, and which one camera.open would use."
+      },
+      {
+        "name": "camera.capture",
+        "description": "Take a still photograph with the rear camera and save it on the device.",
+        "parameters": [
+          {
+            "name": "path",
+            "type": "STRING",
+            "required": false,
+            "description": "Destination directory. Must be inside the agent's writable roots."
+          },
+          {
+            "name": "filename",
+            "type": "STRING",
+            "required": false,
+            "description": "Bare filename. Defaults to a UTC timestamp."
+          },
+          {
+            "name": "jpegQuality",
+            "type": "INT",
+            "required": false,
+            "description": "JPEG quality, 1-100.",
+            "default": "95"
+          },
+          {
+            "name": "publishToGallery",
+            "type": "BOOLEAN",
+            "required": false,
+            "description": "Also index the photo in MediaStore so it appears in the gallery.",
+            "default": "false"
+          }
+        ]
+      },
+      {
+        "name": "camera.open",
+        "description": "Open the device's camera app. The lens hint is best-effort and app-dependent.",
+        "parameters": [
+          {
+            "name": "lens",
+            "type": "STRING",
+            "required": false,
+            "description": "'front' or 'rear'. A hint only; camera apps are free to ignore it."
+          },
+          {
+            "name": "package",
+            "type": "STRING",
+            "required": false,
+            "description": "Open a specific camera app instead of the device default."
+          }
+        ]
+      },
+      {
+        "name": "device.getprop",
+        "description": "Read one or more Android system properties.",
+        "parameters": [
+          {
+            "name": "key",
+            "type": "STRING",
+            "required": false,
+            "description": "A single property name, e.g. ro.product.model."
+          },
+          {
+            "name": "keys",
+            "type": "STRING_LIST",
+            "required": false,
+            "description": "Several property names to read in one request. Takes precedence over 'key'."
+          }
+        ]
+      },
+      {
+        "name": "system.commands",
+        "description": "List every command this agent supports, with its parameters."
+      },
+      {
+        "name": "system.ping",
+        "description": "Check that the agent is reachable and report the device clock."
+      },
+      {
+        "name": "system.status",
+        "description": "Report the device, its permissions, and whether the agent is fully set up."
+      }
+    ]
+  }
+}

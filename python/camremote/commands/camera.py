@@ -113,8 +113,8 @@ def _apps(context: Context) -> int:
             marks = []
             if handler.get("preinstalled"):
                 marks.append("preinstalled")
-            if handler.get("userDefault"):
-                marks.append("user default")
+            if handler.get("defaultHandler"):
+                marks.append("default handler")
             suffix = f"  [{', '.join(marks)}]" if marks else ""
             lines.append(f"    {handler['package']}/{handler['activity']}{suffix}")
 

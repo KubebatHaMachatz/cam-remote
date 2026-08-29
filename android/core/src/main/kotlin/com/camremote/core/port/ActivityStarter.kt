@@ -38,7 +38,12 @@ data class ResolvedActivity(
     val activityName: String,
     /** Preinstalled on the system image, as opposed to sideloaded. */
     val isSystem: Boolean = false,
-    /** The user's chosen default handler for this intent. */
+    /**
+     * What the platform resolves this intent to.
+     *
+     * That is the user's chosen default when several apps compete, and simply "the only handler"
+     * when one does -- so it means "the platform would pick this", not "a human chose it".
+     */
     val isDefault: Boolean = false,
 ) {
     val component: String get() = "$packageName/$activityName"
