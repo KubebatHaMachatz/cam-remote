@@ -213,6 +213,44 @@ What is deliberately *not* done: TLS. A self-signed certificate on a LAN service
 than security, and doing it properly needs a trust story this assignment does not call for. The
 README states the exposure plainly instead.
 
+### Why the agent cannot grant itself camera access
+
+The assignment asks the app to "handle permissions for camera access securely", which invites an
+obvious question: can it be done without the user touching the phone at all?
+
+**For an ordinary installed app, no — and that is the security model working.** `CAMERA` is a
+dangerous runtime permission, and Android is built precisely so that an app cannot grant itself one.
+An app that could would make the entire runtime-permission system decorative. There is no API, no
+manifest flag and no legitimate trick that changes this; anything claiming otherwise is either
+describing a privileged app or a bug.
+
+So "securely" is read here as *handled properly rather than bypassed*, which means four concrete
+behaviours:
+
+- **Checked before use, never assumed.** `CapturePhotoCommand` verifies the grant and returns
+  `PERMISSION_DENIED` with a remediation rather than letting CameraX throw an opaque exception.
+- **Preconditions distinguished from failures.** `camera.open` returns `PRECONDITION_FAILED` naming
+  the overlay permission, because Android *silently discards* a background activity launch without
+  it — and the worst possible outcome is reporting success while nothing happened.
+- **Diagnosable remotely.** `system.status` names exactly which grants are missing, so nobody has to
+  be holding the handset to find out why a command failed.
+- **Degrading rather than dying.** `RemoteControlService.foregroundServiceTypes()` declares the
+  `camera` foreground-service type only once the permission exists: on API 34, declaring it without
+  the grant throws and takes the whole agent down. Half-configured, the agent still runs and still
+  serves `device.getprop` and `system.status`.
+
+Zero-touch *is* achievable, but only by holding privilege this app deliberately does not have:
+
+| Route | What it gives | What it costs |
+|---|---|---|
+| **Device Owner** | `DevicePolicyManager.setPermissionGrantState` silently grants `CAMERA` and `POST_NOTIFICATIONS` to itself. How MDM products and device farms do it. | Provisioning needs a device with **no accounts configured**, so in practice a factory-reset handset; and `SYSTEM_ALERT_WINDOW` is an *appop*, not a runtime permission, so it is not covered. Removing a device owner needs `dpm remove-active-admin` or a factory reset. |
+| **Platform-signed system app** | Everything pre-granted at first boot via a `default-permissions` XML, and privileged apps are not subject to the same background-launch rule — the setup screen disappears entirely. | Needs an AOSP tree or the platform signing key. |
+| **`adb shell pm grant`** | One command per permission. | It is adb, which this project excludes by design — and it is **refused outright by ColorOS**, as the realme handset demonstrated. Not dependable across a fleet. |
+
+The middle row is the version that would fully satisfy the assignment's "no GUI", and it is worth
+saying plainly that it is unreachable from an APK someone sideloads. The setup screen is not a
+shortcut around the permission model; it is what the permission model requires.
+
 ---
 
 ## 8. Storage

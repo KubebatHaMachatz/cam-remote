@@ -83,6 +83,11 @@ taking photographs — it exists because Android will not grant these things rem
 
 Then switch **Agent running** on. The screen shows the address it is listening on.
 
+None of this can be done for you: `CAMERA` is a dangerous runtime permission, and Android is built so
+that an app cannot grant itself one. Zero-touch setup is possible only for a device-owner or
+platform-signed app — [docs/DESIGN.md](docs/DESIGN.md#why-the-agent-cannot-grant-itself-camera-access)
+explains both routes and what they cost.
+
 ## Pair the control machine
 
 On the phone, tap **Pair a control machine**. That opens a sixty-second, single-use window. Then, on
