@@ -8,6 +8,11 @@ from camremote.commands.base import CliCommand, Context
 
 
 def _ping(context: Context) -> int:
+    """Reports round-trip time and the device clock.
+
+    The clock is included because a handset whose time is wrong produces capture timestamps
+    that make no sense later, and this is the cheapest place to notice.
+    """
     response = context.agent.invoke("system.ping")
     context.emit(
         response.data,
@@ -18,6 +23,11 @@ def _ping(context: Context) -> int:
 
 
 def _status(context: Context) -> int:
+    """Summarises the device and, when setup is incomplete, names exactly what is missing.
+
+    The first question after any failure is which grant is absent, and answering it from here
+    saves walking over to wherever the phone is.
+    """
     response = context.agent.invoke("system.status")
     data = response.data
     device = data.get("device", {})
@@ -39,6 +49,11 @@ def _status(context: Context) -> int:
 
 
 def _commands(context: Context) -> int:
+    """Prints the catalog the device reports, including each command's parameters.
+
+    Read from the agent rather than from a list held here, so a client can describe a command
+    it was never compiled against.
+    """
     response = context.agent.invoke("system.commands")
     lines = []
     for command in response.data.get("commands", []):

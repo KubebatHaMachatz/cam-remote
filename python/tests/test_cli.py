@@ -57,6 +57,8 @@ class FakeClient:
 
 
 class CliTestCase(unittest.TestCase):
+    """Shared setup: captured output streams and a config file in a temporary directory."""
+
     def setUp(self):
         self.out = io.StringIO()
         self.err = io.StringIO()
@@ -77,6 +79,8 @@ class CliTestCase(unittest.TestCase):
 
 
 class GetPropTest(CliTestCase):
+    """Reading properties, and how they are printed."""
+
     def test_prints_a_property(self):
         client = FakeClient({"device.getprop": {"properties": {"ro.product.model": "RMX3563"}}})
 
@@ -109,6 +113,8 @@ class GetPropTest(CliTestCase):
 
 
 class FailureTest(CliTestCase):
+    """Exit codes and error reporting -- the part a calling script actually depends on."""
+
     def test_a_failed_command_exits_one_and_shows_the_remediation(self):
         client = FakeClient(
             raises=CommandFailed(
@@ -177,6 +183,8 @@ class FailureTest(CliTestCase):
 
 
 class CaptureTest(CliTestCase):
+    """Taking a photograph and bringing it back to this machine."""
+
     def test_takes_a_picture_and_downloads_it(self):
         client = FakeClient(
             {
@@ -242,6 +250,8 @@ class CaptureTest(CliTestCase):
 
 
 class DiscoveryTest(CliTestCase):
+    """Finding an agent when none has been configured."""
+
     def test_lists_agents_it_finds(self):
         agent = DiscoveredAgent(
             instance="cam-remote realme RMX3563",
@@ -285,6 +295,8 @@ class DiscoveryTest(CliTestCase):
 
 
 class PairingTest(CliTestCase):
+    """Claiming a token and remembering the agent it belongs to."""
+
     def test_saves_the_token_it_was_given(self):
         client = FakeClient(token="fresh-token")
 
@@ -312,6 +324,8 @@ class PairingTest(CliTestCase):
 
 
 class CatalogTest(CliTestCase):
+    """Reporting what the device supports and whether it is ready."""
+
     def test_lists_the_commands_the_device_supports(self):
         client = FakeClient(
             {
@@ -464,6 +478,8 @@ class DeviceReportTest(CliTestCase):
 
 
 class CameraAppsTest(CliTestCase):
+    """Listing the camera apps a device offers."""
+
     def test_lists_every_camera_app_the_device_offers(self):
         client = FakeClient(
             {

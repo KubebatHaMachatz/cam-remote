@@ -4,6 +4,12 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
+/**
+ * The shared secret, which is deliberately four characters for this proof of concept.
+ *
+ * With a keyspace that small, collisions across many draws are expected and fine, so these
+ * tests pin the alphabet and guard against a stuck generator rather than demanding uniqueness.
+ */
 class TokensTest {
 
     @Test

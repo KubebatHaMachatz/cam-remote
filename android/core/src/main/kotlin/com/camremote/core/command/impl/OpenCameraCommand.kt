@@ -64,6 +64,7 @@ class OpenCameraCommand(
 
     override val timeout = 15.seconds
 
+    /** Works down the candidate strategies until one both resolves and starts. */
     override suspend fun execute(params: Params): CommandOutcome {
         val candidates = CameraAppLaunch.candidatesFor(params)
 

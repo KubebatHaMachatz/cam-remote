@@ -9,6 +9,7 @@ import kotlin.test.assertIs
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
 
+/** The liveness command: it should answer, and it should describe itself in the catalog. */
 class PingCommandTest {
 
     @Test

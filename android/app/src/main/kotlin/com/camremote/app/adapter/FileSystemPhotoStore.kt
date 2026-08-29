@@ -10,6 +10,7 @@ import java.io.File
 
 /** Adds a file to the device gallery. Separated out so the store itself needs no Android context. */
 fun interface GalleryPublisher {
+    /** @return the new MediaStore URI, or null when the copy was not possible. */
     fun publish(file: File): String?
 }
 
@@ -38,6 +39,7 @@ class FileSystemPhotoStore(
         loadIndex()
     }
 
+    /** Resolves and creates the directory for a new capture, then returns the full path. */
     override fun destinationFor(directory: String?, filename: String): String {
         val destination = PhotoPaths.resolve(
             defaultRoot = defaultRoot,
@@ -50,6 +52,7 @@ class FileSystemPhotoStore(
         return destination.path
     }
 
+    /** Measures the written file, mints its download id, and appends it to the index. */
     override fun record(path: String, capturedAtMillis: Long): StoredPhoto {
         val file = File(path)
         val stored = StoredPhoto(
@@ -65,8 +68,15 @@ class FileSystemPhotoStore(
         return stored
     }
 
+    /** Hands the file to the gallery publisher; the store itself knows nothing of MediaStore. */
     override fun publish(photo: StoredPhoto): String? = gallery.publish(File(photo.path))
 
+    /**
+     * Opens a recorded photo for download.
+     *
+     * A known id whose file has since been deleted reads as null, not as an exception on the
+     * download route.
+     */
     override fun open(id: String): OpenPhoto? {
         val stored = synchronized(index) { index[id] } ?: return null
         val file = File(stored.path)
@@ -78,6 +88,7 @@ class FileSystemPhotoStore(
         )
     }
 
+    /** Reads the index at startup, dropping entries whose files have gone and compacting. */
     private fun loadIndex() {
         if (!indexFile.isFile) return
         val surviving = indexFile.readLines()
@@ -99,11 +110,13 @@ class FileSystemPhotoStore(
         }
     }
 
+    /** Appends one entry, so an id survives the service being restarted. */
     private fun appendToIndex(stored: StoredPhoto) {
         indexFile.parentFile?.mkdirs()
         indexFile.appendText(encode(stored))
     }
 
+    /** One index line: the photo as JSON, newline-terminated. */
     private fun encode(stored: StoredPhoto): String =
         ProtocolJson.json.encodeToString(StoredPhoto.serializer(), stored) + "\n"
 

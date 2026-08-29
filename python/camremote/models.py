@@ -19,6 +19,7 @@ class CommandError:
 
     @classmethod
     def from_json(cls, payload: Mapping[str, Any]) -> "CommandError":
+        """Reads an error object, defaulting anything the agent chose to omit."""
         return cls(
             code=payload.get("code", "INTERNAL"),
             message=payload.get("message", ""),
@@ -37,10 +38,16 @@ class CommandResponse:
 
     @property
     def ok(self) -> bool:
+        """True when the agent ran the command successfully."""
         return self.status == "OK"
 
     @classmethod
     def from_json(cls, payload: Mapping[str, Any]) -> "CommandResponse":
+        """Reads a response envelope.
+
+        Tolerant by design: fields the agent omits fall back to defaults, so a client stays
+        usable against an agent older or newer than itself.
+        """
         error = payload.get("error")
         return cls(
             id=payload.get("id", ""),

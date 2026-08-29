@@ -47,6 +47,7 @@ class GetPropCommand(private val properties: PropertyReader) : Command {
 
     override val timeout = 10.seconds
 
+    /** Reads the requested properties, reporting an unset one as null rather than "". */
     override suspend fun execute(params: Params): CommandOutcome {
         val keys = requestedKeys(params).map(PropertyKeys::validate)
 
@@ -74,6 +75,12 @@ class GetPropCommand(private val properties: PropertyReader) : Command {
         }
     }
 
+    /**
+     * The property names to read, from either `keys` or `key`.
+     *
+     * @throws InvalidParamsException when neither is present, the list is empty, or it is long
+     *   enough to look like abuse rather than a question.
+     */
     private fun requestedKeys(params: Params): List<String> {
         val many = params.optStringList("keys")
         if (many != null) {

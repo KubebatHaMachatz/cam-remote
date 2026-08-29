@@ -33,9 +33,11 @@ object ProtocolJson {
         throw MalformedRequestException("Malformed command request: ${e.message}", e)
     }
 
+    /** Serialises a request. Used by clients and by the tests that pin the wire format. */
     fun encodeRequest(request: CommandRequest): String =
         json.encodeToString(CommandRequest.serializer(), request)
 
+    /** Serialises a response. This is what the transport actually writes to the socket. */
     fun encodeResponse(response: CommandResponse): String =
         json.encodeToString(CommandResponse.serializer(), response)
 

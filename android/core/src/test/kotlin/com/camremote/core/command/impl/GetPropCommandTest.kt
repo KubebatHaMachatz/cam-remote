@@ -17,6 +17,12 @@ import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
 
+/**
+ * The assignment's `getprop` requirement.
+ *
+ * Covers single and batched reads, the distinction between an unset property and an empty one,
+ * and the parameter validation that keeps a network-supplied key from becoming anything else.
+ */
 class GetPropCommandTest {
 
     private val device = mapOf(

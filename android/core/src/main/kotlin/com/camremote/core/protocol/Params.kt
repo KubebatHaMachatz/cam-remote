@@ -60,16 +60,28 @@ class Params(val raw: JsonObject) {
         }
     }
 
+    /**
+     * The scalar at [key], or null when absent.
+     *
+     * Rejects objects and arrays here so every accessor above gets the same error for the same
+     * mistake, rather than each discovering it differently.
+     */
     private fun primitive(key: String): JsonPrimitive? {
         val element = raw[key] ?: return null
         return element as? JsonPrimitive
             ?: throw InvalidParamsException("Parameter '$key' must be a scalar value")
     }
 
+    // Value semantics, so a test can compare two Params directly and so Params behaves like the
+    // data classes it sits inside. A plain class is used rather than a data class because the
+    // custom serializer below needs to be attached to the type.
+
     override fun equals(other: Any?): Boolean = other is Params && other.raw == raw
 
+    /** Consistent with [equals]. */
     override fun hashCode(): Int = raw.hashCode()
 
+    /** The underlying JSON, which is what a failed assertion or a log line wants to show. */
     override fun toString(): String = raw.toString()
 
     companion object {
@@ -84,7 +96,12 @@ class Params(val raw: JsonObject) {
 /** Serializes [Params] transparently as the underlying JSON object. */
 object ParamsSerializer : KSerializer<Params> {
     private val delegate = JsonObject.serializer()
+
     override val descriptor: SerialDescriptor = delegate.descriptor
+
+    /** Writes the wrapped object, so `Params` is invisible on the wire. */
     override fun serialize(encoder: Encoder, value: Params) = delegate.serialize(encoder, value.raw)
+
+    /** Wraps whatever object was read; validation happens later, in the accessors. */
     override fun deserialize(decoder: Decoder): Params = Params(delegate.deserialize(decoder))
 }

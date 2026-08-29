@@ -33,6 +33,7 @@ class ServerConfig(context: Context) {
         get() = preferences.getString(KEY_TOKEN, null) ?: regenerateToken()
 
     /** Invalidates every paired client. Offered on the setup screen for when a token leaks. */
+    /** Mints a new token and stores it, which invalidates every machine that had paired. */
     fun regenerateToken(): String = Tokens.newToken().also { token ->
         preferences.edit { putString(KEY_TOKEN, token) }
     }

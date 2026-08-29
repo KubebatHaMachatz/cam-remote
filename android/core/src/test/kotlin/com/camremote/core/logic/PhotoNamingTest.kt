@@ -7,6 +7,12 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
+/**
+ * Naming captures, and minting the ids they are downloaded by.
+ *
+ * The filename comes partly from the network, so the cases that matter are the ones where a
+ * caller supplies something awkward: a path separator, a control character, or 300 characters.
+ */
 class PhotoNamingTest {
 
     /** 2023-11-14T22:13:19.123Z */

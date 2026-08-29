@@ -17,6 +17,7 @@ import com.camremote.app.di.AppContainer
  */
 class BootReceiver : BroadcastReceiver() {
 
+    /** Restarts the agent after a reboot, but only if the user had left it switched on. */
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         if (!AppContainer.from(context).config.isEnabled) return

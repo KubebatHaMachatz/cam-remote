@@ -52,6 +52,7 @@ object CameraAppLaunch {
         val targetPackage = params.optString("package")?.let(::validatePackage)
         val extras = lensExtras(params.optString("lens"))
 
+        /** One candidate, carrying the caller's package and lens choices. */
         fun spec(strategy: String, action: String, categories: Set<String> = emptySet()) = LaunchSpec(
             action = action,
             targetPackage = targetPackage,
@@ -71,6 +72,12 @@ object CameraAppLaunch {
         }
     }
 
+    /**
+     * The extras that hint at a lens, or none when the caller expressed no preference.
+     *
+     * @throws InvalidParamsException on an unrecognised value, rather than silently ignoring it —
+     *   a typo that quietly does nothing is worse than one that complains.
+     */
     private fun lensExtras(lens: String?): Map<String, ExtraValue> {
         if (lens == null) return emptyMap()
         val front = when (lens.lowercase()) {
@@ -86,6 +93,7 @@ object CameraAppLaunch {
         )
     }
 
+    /** @throws InvalidParamsException if [name] is not a plausible Android package name. */
     private fun validatePackage(name: String): String {
         if (!PACKAGE_NAME.matches(name)) {
             throw InvalidParamsException("'$name' is not a valid package name")

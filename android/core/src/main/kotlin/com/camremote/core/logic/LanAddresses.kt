@@ -26,6 +26,7 @@ object LanAddresses {
      * A tunnel still scores — reaching the agent over an overlay network such as Tailscale is a
      * supported way to work, just not the one to advertise when a plain LAN address exists.
      */
+    /** Interface preference as a sortable number; see the ordering note above. */
     private fun String.rank(): Int {
         val name = lowercase()
         return when {

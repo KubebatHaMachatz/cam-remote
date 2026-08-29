@@ -17,6 +17,8 @@ FIXTURE = bytes.fromhex(
 
 
 class QueryTest(unittest.TestCase):
+    """The question this client asks the network."""
+
     def test_asks_for_the_service_by_pointer_record(self):
         query = mdns.build_query()
 
@@ -34,6 +36,8 @@ class QueryTest(unittest.TestCase):
 
 
 class ParsingTest(unittest.TestCase):
+    """Reading the answer, including the malformed answers anything on the network can send."""
+
     def test_finds_the_agent_in_a_real_response(self):
         agents = mdns.parse_response(FIXTURE)
 
@@ -83,6 +87,8 @@ class ParsingTest(unittest.TestCase):
 
 
 class NameReadingTest(unittest.TestCase):
+    """DNS name decoding, which is where compression pointers make this non-trivial."""
+
     def test_reads_a_plain_name(self):
         data = b"\x0a_camremote\x04_tcp\x05local\x00"
 

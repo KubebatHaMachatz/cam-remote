@@ -172,10 +172,17 @@ fun Application.commandApi(
     }
 }
 
+/** Writes an already-serialised JSON body with the right content type. */
 private suspend fun ApplicationCall.respondJson(status: HttpStatusCode, body: String) {
     respondText(text = body, contentType = ContentType.Application.Json, status = status)
 }
 
+/**
+ * Writes a failure in the standard envelope.
+ *
+ * Every error the client can meet has the same shape whatever its HTTP status, so the client
+ * needs one parser rather than one per status code.
+ */
 private suspend fun ApplicationCall.respondError(
     status: HttpStatusCode,
     code: ErrorCode,

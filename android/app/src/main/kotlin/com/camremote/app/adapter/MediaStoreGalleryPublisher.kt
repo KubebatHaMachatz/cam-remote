@@ -15,6 +15,12 @@ import java.io.File
  */
 class MediaStoreGalleryPublisher(private val context: Context) : GalleryPublisher {
 
+    /**
+     * Copies the photo into the gallery and returns its MediaStore URI.
+     *
+     * Returns null rather than throwing if it cannot: the capture already succeeded and is
+     * safely on disk, so a failed gallery copy must not fail the command.
+     */
     override fun publish(file: File): String? {
         if (!file.isFile) return null
 

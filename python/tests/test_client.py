@@ -49,6 +49,8 @@ def command_ok(command="system.ping", data=None):
 
 
 class InvokeTest(unittest.TestCase):
+    """Sending a command, and what the client makes of each kind of reply."""
+
     def test_posts_the_command_envelope(self):
         transport = FakeTransport(command_ok())
         RemoteClient(transport).invoke("system.ping")
@@ -136,6 +138,8 @@ class InvokeTest(unittest.TestCase):
 
 
 class HealthAndPairingTest(unittest.TestCase):
+    """The two endpoints reached before a token exists."""
+
     def test_reads_health_without_a_token(self):
         transport = FakeTransport(json_response({"service": "cam-remote", "apiVersion": "v1"}))
 
@@ -167,6 +171,8 @@ class HealthAndPairingTest(unittest.TestCase):
 
 
 class DownloadTest(unittest.TestCase):
+    """Saving a photograph, including choosing a filename when only a directory is given."""
+
     def test_saves_a_photo_using_the_name_the_agent_supplied(self):
         transport = FakeTransport(
             Response(

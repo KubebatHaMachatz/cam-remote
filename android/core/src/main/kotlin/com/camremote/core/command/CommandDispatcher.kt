@@ -23,8 +23,17 @@ class CommandDispatcher(
     private val locks: ResourceLocks = ResourceLocks(),
 ) {
 
+    /**
+     * Runs one request and always answers with a response.
+     *
+     * Nothing thrown by a command escapes here except cancellation: an unknown name, a bad
+     * parameter, a timeout, or an outright bug all become a typed [CommandResponse], because a
+     * transport that has to interpret exceptions is a transport that will get it wrong.
+     */
     suspend fun dispatch(request: CommandRequest): CommandResponse {
         val startedAt = clock.nowMillis()
+
+        /** Milliseconds since the request arrived, for the response's timing field. */
         fun elapsed() = clock.nowMillis() - startedAt
 
         val command = registry[request.command] ?: return CommandResponse.error(

@@ -16,6 +16,12 @@ class ResourceLocks {
     private val mutexes: Map<DeviceResource, Mutex> =
         DeviceResource.entries.associateWith { Mutex() }
 
+    /**
+     * Runs [block] holding [resource] exclusively, or straight away when it is null.
+     *
+     * The caller's timeout wraps this call, so waiting for a busy resource is charged to the
+     * waiting client rather than being invisible.
+     */
     suspend fun <T> withResource(resource: DeviceResource?, block: suspend () -> T): T =
         if (resource == null) block() else mutexes.getValue(resource).withLock { block() }
 }

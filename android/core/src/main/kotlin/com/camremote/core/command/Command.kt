@@ -37,6 +37,15 @@ interface Command {
      */
     val timeout: Duration get() = DEFAULT_TIMEOUT
 
+    /**
+     * Does the work.
+     *
+     * Exclusivity, time budget and error translation are the dispatcher's business, so an
+     * implementation only has to do its own job and describe what happened.
+     *
+     * @throws com.camremote.core.protocol.InvalidParamsException for a bad parameter; every
+     *   other expected failure is returned as [CommandOutcome.Failure] rather than thrown.
+     */
     suspend fun execute(params: Params): CommandOutcome
 
     companion object {
@@ -67,6 +76,7 @@ sealed interface CommandOutcome {
     data class Failure(val error: CommandError) : CommandOutcome
 
     companion object {
+        /** Shorthand for a failure, so commands do not each build a [CommandError] by hand. */
         fun failure(code: ErrorCode, message: String, remediation: String? = null): Failure =
             Failure(CommandError(code, message, remediation))
     }

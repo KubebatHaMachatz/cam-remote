@@ -17,6 +17,13 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
 
+/**
+ * The assignment's "open a camera" requirement.
+ *
+ * Most of these are about portability and failure: falling through the candidate strategies,
+ * surviving a handler that resolves but refuses to start, and reporting the overlay permission
+ * that Android requires before a background app may start an activity at all.
+ */
 class OpenCameraCommandTest {
 
     private val allGranted = PermissionStatus(

@@ -17,6 +17,12 @@ class SystemPropertiesReader : PropertyReader {
             .getMethod("get", String::class.java)
     }
 
+    /**
+     * Reads a property by reflection.
+     *
+     * @throws Exception on builds where hidden-API restrictions block this, which is the signal
+     *   for the chain to fall back to another reader.
+     */
     override fun read(key: String): String? =
         GetPropOutput.parse(getter.invoke(null, key) as? String ?: "")
 }

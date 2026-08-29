@@ -28,6 +28,7 @@ class ListCameraAppsCommand(private val activities: ActivityStarter) : Command {
 
     override val timeout = 15.seconds
 
+    /** Enumerates the handlers for every strategy, without launching anything. */
     override suspend fun execute(params: Params): CommandOutcome {
         var firstUsable: Pair<String, String>? = null
 

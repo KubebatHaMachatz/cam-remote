@@ -21,6 +21,7 @@ import com.camremote.core.port.ResolvedActivity
  */
 class IntentActivityStarter(private val context: Context) : ActivityStarter {
 
+    /** Every activity that handles [spec], flagging which is preinstalled and which is default. */
     override fun resolveAll(spec: LaunchSpec): List<ResolvedActivity> {
         val intent = spec.toIntent()
         val manager = context.packageManager
@@ -42,10 +43,12 @@ class IntentActivityStarter(private val context: Context) : ActivityStarter {
         }
     }
 
+    /** Fires the intent. Throws if the platform refuses, which the caller treats as a signal. */
     override fun start(spec: LaunchSpec) {
         context.startActivity(spec.toIntent())
     }
 
+    /** Converts the platform-free description into a real Intent. */
     private fun LaunchSpec.toIntent(): Intent = Intent(action).also { intent ->
         targetPackage?.let(intent::setPackage)
         // Naming the activity outright is what keeps the system chooser out of the picture.

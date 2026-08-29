@@ -25,10 +25,12 @@ class RemoteClient:
     """A conversation with one agent."""
 
     def __init__(self, transport: Transport):
+        """Binds this client to one agent, reached through the given transport."""
         self.transport = transport
 
     @property
     def base_url(self) -> str:
+        """Where the agent is, as the transport describes it."""
         return self.transport.base_url
 
     def invoke(self, command: str, params: Mapping[str, Any] | None = None) -> CommandResponse:
@@ -95,10 +97,15 @@ class RemoteClient:
 
     @staticmethod
     def _raise_for_transport_status(response: Response, context: str) -> None:
+        """Turns an HTTP error status into the matching typed exception.
+
+        Failures arrive in the same envelope whatever their status, so one reader serves them
+        all; only 401 is singled out, because a rejected token needs a different remedy from
+        everything else.
+        """
         if response.status < 400:
             return
 
-        # Failures arrive in the same envelope whatever their status, so one reader serves them all.
         try:
             error = response.json().get("error", {})
         except TransportError:

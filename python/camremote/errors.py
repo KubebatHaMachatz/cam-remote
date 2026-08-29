@@ -26,6 +26,7 @@ class CommandFailed(CamRemoteError):
     """
 
     def __init__(self, command: str, code: str, message: str, remediation: str | None = None):
+        """Keeps the agent's typed error intact so the CLI can print its remediation."""
         super().__init__(f"{command} failed: {message}")
         self.command = command
         self.code = code

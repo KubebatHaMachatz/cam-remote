@@ -35,6 +35,7 @@ SURVEY_PROPERTIES = [
 
 
 def _configure(parser: argparse.ArgumentParser) -> None:
+    """Declares the optional file to write the full JSON report to."""
     parser.add_argument(
         "--out",
         type=Path,
@@ -59,6 +60,7 @@ def _collect(context: Context, command: str, params: dict | None = None) -> dict
 
 
 def _run(context: Context) -> int:
+    """Gathers the whole survey, writes it if asked, and prints a readable summary."""
     report = {
         "agent": {"baseUrl": context.agent.base_url},
         "status": _collect(context, "system.status"),
@@ -76,6 +78,7 @@ def _run(context: Context) -> int:
 
 
 def _summarise(report: dict, out: Path | None) -> list[str]:
+    """Renders the report as lines for a human, section by section."""
     lines: list[str] = ["Device", f"  agent at {report['agent']['baseUrl']}"]
     lines += _describe_status(report["status"])
     lines += [""] + _describe_camera_apps(report["cameraApps"])
@@ -88,6 +91,7 @@ def _summarise(report: dict, out: Path | None) -> list[str]:
 
 
 def _describe_status(status: dict) -> list[str]:
+    """Describes the device and whether its setup is complete."""
     if "error" in status:
         return [f"  {_error(status)}"]
 
@@ -105,6 +109,7 @@ def _describe_status(status: dict) -> list[str]:
 
 
 def _describe_camera_apps(camera_apps: dict) -> list[str]:
+    """Describes every camera app found, per strategy, and which one would be launched."""
     lines = ["Camera apps"]
     if "error" in camera_apps:
         return lines + [f"  {_error(camera_apps)}"]
@@ -130,6 +135,7 @@ def _describe_camera_apps(camera_apps: dict) -> list[str]:
 
 
 def _describe_properties(properties: dict) -> list[str]:
+    """Prints the surveyed build properties, skipping any the device does not set."""
     lines = ["Build"]
     if "error" in properties:
         return lines + [f"  {_error(properties)}"]
@@ -143,6 +149,7 @@ def _describe_properties(properties: dict) -> list[str]:
 
 
 def _describe_commands(commands: dict) -> list[str]:
+    """Names the commands this agent supports, on one line."""
     if "error" in commands:
         return ["Commands", f"  {_error(commands)}"]
     names = [command["name"] for command in commands.get("commands", [])]
@@ -150,6 +157,7 @@ def _describe_commands(commands: dict) -> list[str]:
 
 
 def _error(section: dict) -> str:
+    """Formats a failed section so the report shows what went wrong in place."""
     error = section["error"]
     return f"ERROR [{error['code']}] {error['message']}"
 

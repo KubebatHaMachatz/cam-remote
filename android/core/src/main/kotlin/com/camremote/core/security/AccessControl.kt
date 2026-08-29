@@ -7,6 +7,7 @@ package com.camremote.core.security
  * server, and so tests need nothing more than a lambda.
  */
 fun interface TokenStore {
+    /** The token that is valid right now. Read per request, so rotation takes effect at once. */
     fun currentToken(): String
 }
 
@@ -20,11 +21,13 @@ fun interface TokenStore {
  */
 class AccessControl(private val tokens: TokenStore) {
 
+    /** True when [authorizationHeader] carries the current bearer token. */
     fun isAuthorized(authorizationHeader: String?): Boolean {
         val presented = extractBearerToken(authorizationHeader) ?: return false
         return constantTimeEquals(presented, tokens.currentToken())
     }
 
+    /** Pulls the credential out of a `Bearer <token>` header, or null if it is not one. */
     private fun extractBearerToken(header: String?): String? {
         if (header.isNullOrBlank()) return null
         val parts = header.trim().split(' ', limit = 2)
@@ -33,6 +36,14 @@ class AccessControl(private val tokens: TokenStore) {
         return parts[1].trim().ifEmpty { null }
     }
 
+    /**
+     * Compares two tokens without leaking how far they matched.
+     *
+     * A plain `==` returns as soon as two characters differ, and the time that takes is
+     * measurable over a network — enough, with patience, to recover a token one character at a
+     * time. Folding the length difference into the result rather than returning early on it
+     * closes the same hole for length.
+     */
     private fun constantTimeEquals(a: String, b: String): Boolean {
         val left = a.encodeToByteArray()
         val right = b.encodeToByteArray()

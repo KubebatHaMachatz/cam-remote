@@ -29,6 +29,7 @@ class PairingWindow(
         openedAtMillis = clock.nowMillis()
     }
 
+    /** True while a claim would succeed. The window is half-open: `[opened, opened + duration)`. */
     fun isOpen(): Boolean = remainingMillis() > 0
 
     /** Milliseconds left in the window, so the setup screen can show a countdown. */

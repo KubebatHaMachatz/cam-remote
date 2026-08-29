@@ -22,6 +22,12 @@ class NsdServiceAdvertiser(context: Context) {
     private val nsd = context.getSystemService<NsdManager>()
     private var listener: NsdManager.RegistrationListener? = null
 
+    /**
+     * Publishes the agent under [serviceName] on the local network.
+     *
+     * Best-effort: a network that blocks multicast is logged and shrugged off, because the
+     * client's `--host` option always works and discovery is a convenience.
+     */
     fun advertise(serviceName: String, port: Int, attributes: Map<String, String>) {
         val manager = nsd ?: return
         stop()
@@ -34,16 +40,20 @@ class NsdServiceAdvertiser(context: Context) {
         }
 
         val registration = object : NsdManager.RegistrationListener {
+            /** Registration succeeded; clients browsing for the service will now find it. */
             override fun onServiceRegistered(info: NsdServiceInfo) {
                 Log.i(TAG, "Advertising ${info.serviceName} on $SERVICE_TYPE port $port")
             }
 
+            /** Logged rather than raised: the agent is perfectly usable without discovery. */
             override fun onRegistrationFailed(info: NsdServiceInfo, errorCode: Int) {
                 Log.w(TAG, "mDNS registration failed ($errorCode); clients must use --host")
             }
 
+            /** Nothing to do; the advertisement is already forgotten. */
             override fun onServiceUnregistered(info: NsdServiceInfo) = Unit
 
+            /** Nothing useful to do on the way down. */
             override fun onUnregistrationFailed(info: NsdServiceInfo, errorCode: Int) = Unit
         }
 
@@ -52,6 +62,7 @@ class NsdServiceAdvertiser(context: Context) {
             .onFailure { Log.w(TAG, "Could not start mDNS advertising", it) }
     }
 
+    /** Withdraws the advertisement. Safe to call when nothing was ever registered. */
     fun stop() {
         val manager = nsd ?: return
         listener?.let { runCatching { manager.unregisterService(it) } }

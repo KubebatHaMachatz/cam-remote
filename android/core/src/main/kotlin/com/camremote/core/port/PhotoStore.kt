@@ -41,7 +41,11 @@ interface PhotoStore {
      */
     fun destinationFor(directory: String?, filename: String): String
 
-    /** Records a freshly written file and returns its metadata, including its download id. */
+    /**
+     * Records a file the camera has just written, minting the id clients download it by.
+     *
+     * Separate from [destinationFor] because the size is only known once the bytes are on disk.
+     */
     fun record(path: String, capturedAtMillis: Long): StoredPhoto
 
     /** Adds the photo to the device gallery, returning its MediaStore URI, or null if unavailable. */

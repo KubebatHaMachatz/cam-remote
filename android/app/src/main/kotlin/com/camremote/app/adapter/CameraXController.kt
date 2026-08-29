@@ -39,6 +39,12 @@ class CameraXController(
     private val lifecycleOwner: LifecycleOwner,
 ) : CameraController {
 
+    /**
+     * Asks Camera2 whether any sensor faces backwards.
+     *
+     * Camera2 rather than CameraX because this has to answer synchronously and cheaply, without
+     * waiting for a camera provider that may take a moment to appear.
+     */
     override fun hasRearCamera(): Boolean {
         val manager = context.getSystemService<CameraManager>() ?: return false
         return runCatching {
@@ -49,6 +55,7 @@ class CameraXController(
         }.getOrDefault(false)
     }
 
+    /** Binds an ImageCapture to the rear camera, takes one photograph, and unbinds again. */
     override suspend fun captureRearStill(request: CaptureRequest): CaptureResult =
         // Binding use cases is a main-thread operation in CameraX.
         withContext(Dispatchers.Main) {
@@ -76,16 +83,19 @@ class CameraXController(
             measure(file)
         }
 
+    /** Bridges CameraX's callback into a coroutine, surfacing a capture error as an exception. */
     private suspend fun ImageCapture.awaitCapture(file: File) =
         suspendCancellableCoroutine { continuation ->
             takePicture(
                 ImageCapture.OutputFileOptions.Builder(file).build(),
                 ContextCompat.getMainExecutor(context),
                 object : ImageCapture.OnImageSavedCallback {
+                    /** The file is on disk; let the caller continue. */
                     override fun onImageSaved(outputFileResults: ImageCapture.OutputFileResults) {
                         continuation.resume(Unit)
                     }
 
+                    /** Re-thrown in the caller's coroutine, where the command can classify it. */
                     override fun onError(exception: ImageCaptureException) {
                         continuation.resumeWithException(exception)
                     }

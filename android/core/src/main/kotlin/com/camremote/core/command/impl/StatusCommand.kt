@@ -33,6 +33,7 @@ class StatusCommand(
         description = "Report the device, its permissions, and whether the agent is fully set up.",
     )
 
+    /** Gathers permissions, camera availability and the device clock into one answer. */
     override suspend fun execute(params: Params): CommandOutcome {
         val status = permissions.status()
         return CommandOutcome.Success(
@@ -57,6 +58,7 @@ class StatusCommand(
     }
 
     /** Named rather than merely flagged, so the client can print the exact remedy. */
+    /** Names the absent grants, so the client can print the exact remedy rather than a flag. */
     private fun missingGrants(status: PermissionStatus): List<String> = buildList {
         if (!status.camera) add("camera")
         if (!status.notifications) add("notifications")

@@ -15,6 +15,11 @@ class FirstAvailablePropertyReader(private val readers: List<PropertyReader>) : 
         require(readers.isNotEmpty()) { "At least one PropertyReader is required" }
     }
 
+    /**
+     * Asks each reader in turn, returning the first answer.
+     *
+     * @throws Exception the last reader's failure, when every one of them failed.
+     */
     override fun read(key: String): String? {
         var lastFailure: Exception? = null
         for (reader in readers) {

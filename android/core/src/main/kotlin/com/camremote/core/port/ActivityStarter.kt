@@ -69,6 +69,11 @@ interface ActivityStarter {
      */
     fun resolveAll(spec: LaunchSpec): List<ResolvedActivity>
 
-    /** @throws Exception when the platform refuses the launch. */
+    /**
+     * Launches [spec], by explicit component when it names one.
+     *
+     * @throws Exception when the platform refuses — which resolving successfully does not rule
+     *   out, so callers should be ready to try the next candidate.
+     */
     fun start(spec: LaunchSpec)
 }

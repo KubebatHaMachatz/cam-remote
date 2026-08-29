@@ -94,6 +94,7 @@ class AppContainer private constructor(private val context: Context) {
         )
     }
 
+    /** How this handset identifies itself to a client, for discovery output and reports. */
     fun deviceDescription(): DeviceDescription = DeviceDescription(
         name = Build.DEVICE ?: "android",
         model = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
@@ -138,6 +139,12 @@ class AppContainer private constructor(private val context: Context) {
         private var instance: AppContainer? = null
 
         /** The process-wide container. Safe to call from any component or thread. */
+        /**
+         * The one container for this process.
+         *
+         * Double-checked because the service and the setup screen can reach for it from
+         * different threads at once.
+         */
         fun from(context: Context): AppContainer =
             instance ?: synchronized(this) {
                 instance ?: AppContainer(context.applicationContext).also { instance = it }

@@ -16,8 +16,10 @@ import java.net.NetworkInterface
  */
 object LocalAddresses {
 
+    /** The best address to advertise to an operator, or null when the device is offline. */
     fun firstLanIpv4(): String? = LanAddresses.preferred(candidates())
 
+    /** Every IPv4 address on an interface that is up, paired with that interface's name. */
     private fun candidates(): List<LanAddresses.Candidate> = runCatching {
         NetworkInterface.getNetworkInterfaces()
             .asSequence()

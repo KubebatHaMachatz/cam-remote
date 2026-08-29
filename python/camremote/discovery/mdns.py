@@ -54,9 +54,11 @@ class DiscoveredAgent:
 
     @property
     def base_url(self) -> str:
+        """The address a client should connect to."""
         return f"http://{self.host}:{self.port}"
 
     def describe(self) -> str:
+        """One line naming this agent, preferring the model over the raw service instance."""
         model = self.attributes.get("model", self.instance)
         return f"{model} at {self.host}:{self.port}"
 
@@ -249,6 +251,7 @@ def read_name(data: bytes, offset: int) -> tuple[str, int]:
 
 
 def _parse_srv(data: bytes, record: Record) -> tuple[str, int] | None:
+    """Reads a SRV record's target host and port, or None if it is malformed."""
     if len(record.rdata) < 7:
         return None
     _priority, _weight, port = struct.unpack_from("!HHH", record.rdata, 0)
@@ -262,6 +265,7 @@ def _parse_srv(data: bytes, record: Record) -> tuple[str, int] | None:
 
 
 def _parse_txt(rdata: bytes) -> dict[str, str]:
+    """Reads TXT key=value pairs, skipping any entry that is not one."""
     attributes: dict[str, str] = {}
     cursor = 0
     while cursor < len(rdata):
@@ -277,6 +281,7 @@ def _parse_txt(rdata: bytes) -> dict[str, str]:
 
 
 def _encode_name(name: str) -> bytes:
+    """Encodes a domain name as DNS length-prefixed labels."""
     encoded = b""
     for label in name.rstrip(".").split("."):
         raw = label.encode("utf-8")

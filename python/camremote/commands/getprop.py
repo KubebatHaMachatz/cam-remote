@@ -8,6 +8,7 @@ from camremote.commands.base import CliCommand, Context
 
 
 def _configure(parser: argparse.ArgumentParser) -> None:
+    """Declares the positional property names."""
     parser.add_argument(
         "keys",
         nargs="+",
@@ -17,6 +18,7 @@ def _configure(parser: argparse.ArgumentParser) -> None:
 
 
 def _run(context: Context) -> int:
+    """Reads the requested properties and prints them aligned in a column."""
     keys = context.args.keys
     # One request whatever the number of keys: the round trip is the expensive part, not the read.
     params = {"key": keys[0]} if len(keys) == 1 else {"keys": keys}

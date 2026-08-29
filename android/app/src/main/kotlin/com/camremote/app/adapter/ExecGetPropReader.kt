@@ -20,6 +20,11 @@ class ExecGetPropReader(
     private val timeoutSeconds: Long = 5,
 ) : PropertyReader {
 
+    /**
+     * Reads a property, trying each configured binary until one works.
+     *
+     * @throws java.io.IOException when none of them does, so a fallback reader gets its turn.
+     */
     override fun read(key: String): String? {
         var lastFailure: Exception? = null
         for (binary in binaries) {
@@ -32,6 +37,7 @@ class ExecGetPropReader(
         throw lastFailure ?: IOException("No getprop binary configured")
     }
 
+    /** Runs one `getprop` binary and interprets what it printed. */
     private fun read(binary: String, key: String): String? {
         val process = ProcessBuilder(binary, key).start()
         try {

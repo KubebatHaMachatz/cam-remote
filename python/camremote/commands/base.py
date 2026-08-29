@@ -51,6 +51,7 @@ class Context:
                 print(line, file=self.out)
 
     def warn(self, message: str) -> None:
+        """Writes a diagnostic to stderr, keeping stdout clean for machine-read output."""
         print(message, file=self.err)
 
 

@@ -7,6 +7,11 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertNull
 
+/**
+ * The registry is the extension point: adding a capability means adding one entry here.
+ * These tests cover lookup, the duplicate-name mistake that a hand-written list invites, and
+ * the stable catalog ordering clients rely on.
+ */
 class CommandRegistryTest {
 
     @Test

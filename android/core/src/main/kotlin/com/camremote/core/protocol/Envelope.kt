@@ -56,6 +56,7 @@ data class CommandResponse(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) val durationMs: Long = 0,
 ) {
     companion object {
+        /** A successful reply, carrying the command's payload. */
         fun ok(
             id: String,
             command: String,
@@ -69,6 +70,7 @@ data class CommandResponse(
             durationMs = durationMs,
         )
 
+        /** A failed reply, built from an error the command produced. */
         fun error(
             id: String,
             command: String,
@@ -82,6 +84,7 @@ data class CommandResponse(
             durationMs = durationMs,
         )
 
+        /** A failed reply, built from its parts. The common case at call sites. */
         fun error(
             id: String,
             command: String,

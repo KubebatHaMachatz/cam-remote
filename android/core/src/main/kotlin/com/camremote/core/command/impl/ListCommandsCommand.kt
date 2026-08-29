@@ -28,6 +28,7 @@ class ListCommandsCommand(
         description = "List every command this agent supports, with its parameters.",
     )
 
+    /** Returns the live catalog, so clients can discover commands they predate. */
     override suspend fun execute(params: Params): CommandOutcome = CommandOutcome.Success(
         buildJsonObject {
             put(

@@ -19,6 +19,7 @@ import com.camremote.core.protocol.PermissionStatus
  */
 class AndroidPermissionInspector(private val context: Context) : PermissionInspector {
 
+    /** Reads all four grants fresh, since the user may change any of them at any time. */
     override fun status() = PermissionStatus(
         camera = isGranted(Manifest.permission.CAMERA),
         notifications = areNotificationsAllowed(),
@@ -26,9 +27,11 @@ class AndroidPermissionInspector(private val context: Context) : PermissionInspe
         ignoringBatteryOptimizations = isIgnoringBatteryOptimizations(),
     )
 
+    /** Whether a normal runtime permission is held. */
     private fun isGranted(permission: String): Boolean =
         ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
+    /** Whether the foreground-service notification may be shown. */
     private fun areNotificationsAllowed(): Boolean =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             isGranted(Manifest.permission.POST_NOTIFICATIONS)
@@ -38,6 +41,7 @@ class AndroidPermissionInspector(private val context: Context) : PermissionInspe
             true
         }
 
+    /** Whether the agent is exempt from Doze, which decides if it answers with the screen off. */
     private fun isIgnoringBatteryOptimizations(): Boolean =
         context.getSystemService<PowerManager>()
             ?.isIgnoringBatteryOptimizations(context.packageName) == true

@@ -9,6 +9,7 @@ from camremote.commands.base import CliCommand, Context
 
 
 def _configure_open(parser: argparse.ArgumentParser) -> None:
+    """Declares the optional lens hint and target package."""
     parser.add_argument(
         "--lens",
         choices=("front", "rear"),
@@ -21,6 +22,7 @@ def _configure_open(parser: argparse.ArgumentParser) -> None:
 
 
 def _open(context: Context) -> int:
+    """Opens the device's camera app and reports which component the agent launched."""
     params = {}
     if context.args.lens:
         params["lens"] = context.args.lens
@@ -33,6 +35,7 @@ def _open(context: Context) -> int:
 
 
 def _configure_capture(parser: argparse.ArgumentParser) -> None:
+    """Declares where the photo goes, on the device and on this machine."""
     parser.add_argument(
         "--out",
         type=Path,
@@ -60,6 +63,11 @@ def _configure_capture(parser: argparse.ArgumentParser) -> None:
 
 
 def _capture(context: Context) -> int:
+    """Takes a rear-camera photograph and, unless told otherwise, downloads it here.
+
+    The download is the default because a path on the handset is of no use to an operator who
+    is not holding it.
+    """
     params = {}
     if context.args.path:
         params["path"] = context.args.path
@@ -91,12 +99,17 @@ def _capture(context: Context) -> int:
 
 
 def _megabytes(size: int | None) -> str:
+    """Formats a byte count for humans, tolerating a missing value."""
     if not size:
         return "unknown size"
     return f"{size / 1_000_000:.2f} MB"
 
 
 def _apps(context: Context) -> int:
+    """Lists every camera app the device offers and which one `open-camera` would choose.
+
+    Purely diagnostic, and the fastest way to explain why a new handset behaves differently.
+    """
     response = context.agent.invoke("camera.apps")
     data = response.data
 

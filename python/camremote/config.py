@@ -106,4 +106,5 @@ def resolve(
 
 
 def _escape(value: str) -> str:
+    """Escapes a value for a TOML basic string."""
     return value.replace("\\", "\\\\").replace('"', '\\"')

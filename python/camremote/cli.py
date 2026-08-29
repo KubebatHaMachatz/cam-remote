@@ -52,16 +52,25 @@ class _Parser(argparse.ArgumentParser):
     """
 
     def error(self, message: str):
+        """Reports a usage error as an exception instead of exiting the process."""
         raise _UsageError(message, self.format_usage())
 
 
 class _UsageError(Exception):
+    """A bad command line, carrying the usage text to show alongside the complaint."""
+
     def __init__(self, message: str, usage: str):
+        """Keeps the usage text with the complaint, so both can be printed together."""
         super().__init__(message)
         self.usage = usage
 
 
 def build_parser() -> _Parser:
+    """Builds the argument parser, with one subcommand per entry in the command registry.
+
+    Driven by the registry rather than written out here, so adding a verb is one file and one
+    line -- the same shape the agent uses for its own commands.
+    """
     parser = _Parser(
         prog="camremote",
         description="Control a cam-remote Android agent over the local network.",
@@ -209,7 +218,13 @@ def _locate_agent(
 
 
 def _http_client(timeout: float) -> Callable[[config.AgentConfig], RemoteClient]:
+    """Returns the factory that builds a real HTTP-backed client.
+
+    A factory rather than a direct construction so tests can substitute their own.
+    """
+
     def connect(resolved: config.AgentConfig) -> RemoteClient:
+        """Connects to the agent named by the resolved configuration."""
         return RemoteClient(
             HttpTransport(
                 host=resolved.host,

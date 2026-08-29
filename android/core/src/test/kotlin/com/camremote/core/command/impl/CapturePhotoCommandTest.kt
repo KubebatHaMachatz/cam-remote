@@ -21,6 +21,13 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 
+/**
+ * The assignment's rear-camera requirement, specified against fakes.
+ *
+ * Covers the preconditions that must be checked before the sensor is touched, the destination
+ * and quality parameters, and that a device with no rear camera is refused rather than quietly
+ * served by the front one.
+ */
 class CapturePhotoCommandTest {
 
     private val allGranted = PermissionStatus(
@@ -30,6 +37,7 @@ class CapturePhotoCommandTest {
         ignoringBatteryOptimizations = true,
     )
 
+    /** A camera that can be told it has no rear sensor, or made to fail mid-capture. */
     private class FakeCamera(
         private val hasRear: Boolean = true,
         private val failWith: Exception? = null,
@@ -43,6 +51,7 @@ class CapturePhotoCommandTest {
         }
     }
 
+    /** A store that records what it was asked to write, and can reject a destination. */
     private class FakePhotoStore(private val failWith: Exception? = null) : PhotoStore {
         var recorded: String? = null
         var published = false

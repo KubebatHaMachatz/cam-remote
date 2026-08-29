@@ -39,12 +39,19 @@ class RemoteControlService : LifecycleService() {
     private var advertiser: NsdServiceAdvertiser? = null
     private var wifiLock: WifiManager.WifiLock? = null
 
+    /** Builds the container and the notification channel before anything can be started. */
     override fun onCreate() {
         super.onCreate()
         container = AppContainer.from(applicationContext)
         createNotificationChannel()
     }
 
+    /**
+     * Starts the agent, or stops it when sent [ACTION_STOP].
+     *
+     * Returns START_STICKY so Android brings the agent back if it reclaims the process: an
+     * agent that has quietly stopped answering is worse than one that is plainly switched off.
+     */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
 
@@ -62,6 +69,7 @@ class RemoteControlService : LifecycleService() {
         return START_STICKY
     }
 
+    /** Releases everything the agent holds: the advertisement, the socket, and the Wi-Fi lock. */
     override fun onDestroy() {
         advertiser?.stop()
         server?.stop()
@@ -70,11 +78,13 @@ class RemoteControlService : LifecycleService() {
         super.onDestroy()
     }
 
+    /** Not bindable: the agent is reached over the network, never by another local component. */
     override fun onBind(intent: Intent): IBinder? {
         super.onBind(intent)
         return null
     }
 
+    /** Brings up the HTTP server, the Wi-Fi lock and the mDNS advertisement, once. */
     private fun startServer() {
         if (server?.isRunning == true) return
 
@@ -109,6 +119,11 @@ class RemoteControlService : LifecycleService() {
         Log.i(TAG, "cam-remote agent listening on port $port")
     }
 
+    /**
+     * Promotes the service to the foreground with its ongoing notification.
+     *
+     * Required for the agent to survive at all, and — from API 34 — for it to touch the camera.
+     */
     private fun startInForeground() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
@@ -171,11 +186,13 @@ class RemoteControlService : LifecycleService() {
         wifiLock = wifi.createWifiLock(mode, WIFI_LOCK_TAG).apply { acquire() }
     }
 
+    /** Drops the Wi-Fi lock, if one is held. */
     private fun releaseWifiLock() {
         wifiLock?.takeIf { it.isHeld }?.release()
         wifiLock = null
     }
 
+    /** Registers the low-importance channel the ongoing notification belongs to. */
     private fun createNotificationChannel() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
@@ -197,10 +214,12 @@ class RemoteControlService : LifecycleService() {
 
         const val ACTION_STOP = "com.camremote.app.action.STOP"
 
+        /** Starts the agent. Safe to call when it is already running. */
         fun start(context: Context) {
             context.startForegroundService(Intent(context, RemoteControlService::class.java))
         }
 
+        /** Stops the agent and remembers that it is meant to stay stopped. */
         fun stop(context: Context) {
             context.startService(
                 Intent(context, RemoteControlService::class.java).setAction(ACTION_STOP),

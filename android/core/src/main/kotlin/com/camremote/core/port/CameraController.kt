@@ -21,9 +21,18 @@ data class CaptureResult(
  */
 interface CameraController {
 
-    /** False on a device with no rear-facing sensor, which is a reportable condition. */
+    /**
+     * Whether this device has a rear-facing sensor at all.
+     *
+     * Checked rather than assumed, so "rear camera only" is enforced instead of quietly
+     * becoming "whichever camera happened to be available".
+     */
     fun hasRearCamera(): Boolean
 
-    /** @throws Exception when the capture fails or the camera is unavailable. */
+    /**
+     * Takes one photograph with the rear camera and writes it where [request] says.
+     *
+     * @throws Exception when the capture fails or another app holds the camera.
+     */
     suspend fun captureRearStill(request: CaptureRequest): CaptureResult
 }

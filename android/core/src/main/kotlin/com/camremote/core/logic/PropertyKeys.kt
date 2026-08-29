@@ -18,7 +18,11 @@ object PropertyKeys {
     /** Comfortably above the longest real property name, and far below anything abusive. */
     private const val MAX_LENGTH = 128
 
-    /** @throws InvalidParamsException if [key] is not a plausible property name. */
+    /**
+     * Returns [key], trimmed, once it looks like an Android property name.
+     *
+     * @throws InvalidParamsException if it does not.
+     */
     fun validate(key: String): String {
         val trimmed = key.trim()
         if (trimmed.isEmpty()) {

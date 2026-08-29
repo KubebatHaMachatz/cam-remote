@@ -67,6 +67,8 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class HttpTransportTest(unittest.TestCase):
+    """The transport, exercised against a real server on a loopback socket."""
+
     @classmethod
     def setUpClass(cls):
         cls.server = HTTPServer(("127.0.0.1", 0), _Handler)

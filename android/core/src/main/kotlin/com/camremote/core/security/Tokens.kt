@@ -28,6 +28,7 @@ object Tokens {
 
     private val random = SecureRandom()
 
+    /** A fresh token. Called on first run, and again whenever the user rotates it. */
     fun newToken(): String = buildString(LENGTH) {
         // nextInt(bound) rather than an index derived by modulo, which would favour the start of
         // the alphabet and quietly shrink an already small keyspace.

@@ -9,5 +9,6 @@ import com.camremote.core.protocol.PermissionStatus
  * the OS will quietly drop.
  */
 fun interface PermissionInspector {
+    /** The grants in place right now. Re-read per call, since the user may change them. */
     fun status(): PermissionStatus
 }

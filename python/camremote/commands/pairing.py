@@ -9,6 +9,7 @@ from camremote.commands.base import CliCommand, Context
 
 
 def _configure_discover(parser: argparse.ArgumentParser) -> None:
+    """Declares how long to listen for mDNS replies."""
     parser.add_argument(
         "--timeout",
         type=float,
@@ -18,6 +19,11 @@ def _configure_discover(parser: argparse.ArgumentParser) -> None:
 
 
 def _discover(context: Context) -> int:
+    """Browses the network for agents, explaining the likely cause when none answer.
+
+    Returns exit code 3 on an empty result: silence usually means blocked multicast rather
+    than an absent device, so the message points at `--host`.
+    """
     agents = context.discover(context.args.timeout)
     if not agents:
         context.warn(
@@ -35,6 +41,11 @@ def _discover(context: Context) -> int:
 
 
 def _pair(context: Context) -> int:
+    """Claims the agent's token and saves it, with the address, for later commands.
+
+    Requires someone to have tapped Pair on the handset moments before; that physical act is
+    what authorises the handover.
+    """
     token = context.agent.pair()
     saved = config.save(
         config.AgentConfig(

@@ -9,5 +9,6 @@ package com.camremote.core.logic
  */
 object GetPropOutput {
 
+    /** The property's value, or null when `getprop` printed nothing. */
     fun parse(raw: String): String? = raw.trim().ifEmpty { null }
 }

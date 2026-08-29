@@ -22,12 +22,14 @@ class CommandRegistry(commands: List<Command>) {
         byName = commands.associateBy { it.descriptor.name }
     }
 
+    /** The command registered under [name], or null when there is none. */
     operator fun get(name: String): Command? = byName[name]
 
     /** Registered names, sorted, for error messages that tell the caller what does exist. */
     val names: List<String> = byName.keys.sorted()
 
     /** The catalog returned by `system.commands`, sorted so client output is stable. */
+    /** Every command's self-description, for `system.commands`. */
     fun descriptors(): List<CommandDescriptor> = byName.values
         .map { it.descriptor }
         .sortedBy { it.name }

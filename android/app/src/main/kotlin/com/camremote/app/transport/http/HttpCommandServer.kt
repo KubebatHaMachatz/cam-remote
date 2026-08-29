@@ -25,12 +25,14 @@ class HttpCommandServer(
 
     val isRunning: Boolean get() = engine != null
 
+    /** Binds the port and begins serving. Does nothing if already running. */
     fun start() {
         if (engine != null) return
         engine = embeddedServer(CIO, port = port, host = BIND_ALL_INTERFACES) { configure() }
             .start(wait = false)
     }
 
+    /** Stops serving, giving in-flight requests a brief grace period to finish. */
     fun stop() {
         engine?.stop(GRACE_MILLIS, TIMEOUT_MILLIS)
         engine = null

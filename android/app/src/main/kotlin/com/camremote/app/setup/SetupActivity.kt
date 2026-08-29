@@ -45,6 +45,7 @@ class SetupActivity : AppCompatActivity() {
     private lateinit var batteryButton: Button
     private lateinit var pairButton: Button
 
+    /** Binds the views and wires each control to the permission or action it triggers. */
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_setup)
@@ -93,6 +94,7 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
+    /** Re-reads the device state, and repairs an agent that has been killed since. */
     override fun onResume() {
         super.onResume()
         // The agent may have been killed by an app update, a process reclaim, or an OEM battery
@@ -104,6 +106,7 @@ class SetupActivity : AppCompatActivity() {
         render()
     }
 
+    /** Opens the pairing window and counts it down on the button until it closes. */
     private fun openPairingWindow() {
         container.pairingWindow.open()
         lifecycleScope.launch {
@@ -116,6 +119,7 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
+    /** Redraws every control from the current permission, server and token state. */
     private fun render() {
         val status = container.permissions.status()
 
@@ -137,6 +141,7 @@ class SetupActivity : AppCompatActivity() {
         renderReadiness(status)
     }
 
+    /** Shows either the explanation of what is still needed, or that setup is done. */
     private fun renderReadiness(status: PermissionStatus) {
         findViewById<TextView>(R.id.text_permission_help).text = if (status.isComplete) {
             getString(R.string.setup_ready)
@@ -145,8 +150,14 @@ class SetupActivity : AppCompatActivity() {
         }
     }
 
+    /** A button label that states whether the grant is already held. */
     private fun label(resource: Int, granted: Boolean): String =
         getString(if (granted) R.string.setup_granted else R.string.setup_grant, getString(resource))
 
+    /**
+     * This app's `package:` URI, which Settings screens use to open the right entry.
+     *
+     * Honoured on most builds; ColorOS ignores it and opens the full app list instead.
+     */
     private fun packageUri(): Uri = Uri.parse("package:$packageName")
 }

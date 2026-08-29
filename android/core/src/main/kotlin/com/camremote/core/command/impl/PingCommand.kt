@@ -23,6 +23,7 @@ class PingCommand(private val clock: Clock) : Command {
         description = "Check that the agent is reachable and report the device clock.",
     )
 
+    /** Answers immediately with the device clock; touches no hardware. */
     override suspend fun execute(params: Params): CommandOutcome = CommandOutcome.Success(
         buildJsonObject {
             put("pong", JsonPrimitive(true))

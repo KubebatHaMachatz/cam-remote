@@ -15,6 +15,8 @@ from camremote.errors import CamRemoteError
 
 
 class LoadTest(unittest.TestCase):
+    """Reading the saved agent, including when there is nothing saved."""
+
     def test_reads_a_saved_agent(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "camremote.toml"
@@ -46,6 +48,8 @@ class LoadTest(unittest.TestCase):
 
 
 class SaveTest(unittest.TestCase):
+    """Writing it back, with permissions befitting a file holding a secret."""
+
     def test_round_trips(self):
         with TemporaryDirectory() as directory:
             path = Path(directory) / "nested" / "camremote.toml"
@@ -66,6 +70,8 @@ class SaveTest(unittest.TestCase):
 
 
 class ResolveTest(unittest.TestCase):
+    """Precedence between flag, environment and file -- a contract, not an accident."""
+
     def setUp(self):
         self.directory = TemporaryDirectory()
         self.path = Path(self.directory.name) / "camremote.toml"

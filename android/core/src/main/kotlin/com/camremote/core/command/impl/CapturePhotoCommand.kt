@@ -73,6 +73,7 @@ class CapturePhotoCommand(
     // on a cold sensor, and a spurious timeout here would leave a file half-written.
     override val timeout = 45.seconds
 
+    /** Checks the preconditions, takes the photograph, and records where it landed. */
     override suspend fun execute(params: Params): CommandOutcome {
         if (!permissions.status().camera) {
             return CommandOutcome.failure(

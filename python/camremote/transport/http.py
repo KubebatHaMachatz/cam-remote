@@ -25,6 +25,12 @@ class HttpTransport(Transport):
         token: str | None = None,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
     ):
+        """Points this transport at one agent.
+
+        :param token: sent as a bearer credential on every request; omitted entirely when None,
+            since `health` and `pair` are reached before a token exists.
+        :param timeout: generous by default, because a capture legitimately takes seconds.
+        """
         self.host = host
         self.port = port
         self.token = token
@@ -32,9 +38,17 @@ class HttpTransport(Transport):
 
     @property
     def base_url(self) -> str:
+        """Where this transport points, for error messages the operator has to act on."""
         return f"http://{self.host}:{self.port}"
 
     def request(self, method: str, path: str, *, body: bytes | None = None) -> Response:
+        """Performs one HTTP request against the agent.
+
+        An error *status* is a normal reply here and comes back as a [Response]; only being
+        unable to reach the agent at all raises.
+
+        :raises TransportError: the agent could not be reached, or timed out.
+        """
         request = urllib.request.Request(
             url=f"{self.base_url}{path}",
             data=body,
