@@ -44,7 +44,7 @@ def load(path: Path | None = None) -> AgentConfig:
 
     return AgentConfig(
         host=parsed.get("host"),
-        port=int(parsed.get("port", DEFAULT_PORT)),
+        port=_port(parsed.get("port", DEFAULT_PORT), f"port in {path}"),
     )
 
 
@@ -76,19 +76,36 @@ def resolve(
     if env_host:
         resolved = replace(resolved, host=env_host)
     if env_port:
-        try:
-            resolved = replace(resolved, port=int(env_port))
-        except ValueError as error:
-            # Silently ignoring it would send the request to the wrong port and produce a baffling
-            # connection error several steps later.
-            raise CamRemoteError(f"{ENV_PORT} must be a number, got {env_port!r}") from error
+        resolved = replace(resolved, port=_port(env_port, ENV_PORT))
 
     if host:
         resolved = replace(resolved, host=host)
     if port:
-        resolved = replace(resolved, port=port)
+        resolved = replace(resolved, port=_port(port, "--port"))
 
     return resolved
+
+
+def _port(value: object, source: str) -> int:
+    """Validates a port from any of the three places one can come from.
+
+    Silently accepting a bad value would send the request somewhere else and surface as a
+    baffling connection error several steps later, so each is rejected where it is read and
+    named by its source. Booleans are checked first because bool subclasses int in Python,
+    so int(True) is 1 and a naive conversion would quietly connect to port 1; floats are
+    refused for the same reason, since int(8099.5) is 8099 with no complaint.
+    """
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        raise CamRemoteError(f"{source} must be a whole number, got {value!r}")
+
+    try:
+        port = int(value)
+    except ValueError:
+        raise CamRemoteError(f"{source} must be a whole number, got {value!r}") from None
+
+    if not 1 <= port <= 65535:
+        raise CamRemoteError(f"{source} must be between 1 and 65535, got {port}")
+    return port
 
 
 def _escape(value: str) -> str:
