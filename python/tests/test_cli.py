@@ -275,12 +275,42 @@ class CatalogTest(CliTestCase):
                          "category": "PRIMARY"},
                         {"name": "device.getprop", "description": "Read a property.",
                          "category": "PRIMARY"},
+                        {"name": "system.commands", "description": "List the catalog.",
+                         "category": "DIAGNOSTIC"},
                         {"name": "system.status", "description": "Report readiness.",
                          "category": "DIAGNOSTIC"},
                     ]
                 }
             }
         )
+
+    def test_names_the_verb_an_operator_would_actually_type(self):
+        # The catalog is the agent's, so it speaks the agent's names -- but "camera.capture" is
+        # not a thing anyone can type. The verb that invokes it is.
+        self.run_cli("commands", client=self._catalog_client())
+        printed = self.out.getvalue()
+
+        for verb in ("take-picture", "open-camera", "getprop", "camera-apps", "status", "commands"):
+            self.assertIn(verb, printed)
+
+    def test_still_shows_the_agent_s_own_name_for_each_command(self):
+        # It is what appears in the device log, in --json, and on the wire, so it cannot vanish.
+        self.run_cli("commands", client=self._catalog_client())
+
+        self.assertIn("camera.capture", self.out.getvalue())
+
+    def test_marks_an_agent_command_this_client_has_no_verb_for(self):
+        client = FakeClient(
+            {"system.commands": {"commands": [
+                {"name": "device.reboot", "description": "Restart.", "category": "PRIMARY"}
+            ]}}
+        )
+
+        self.run_cli("commands", client=client)
+        printed = self.out.getvalue()
+
+        self.assertIn("device.reboot", printed)
+        self.assertIn("no CLI verb", printed)
 
     def test_separates_the_agent_s_capabilities_from_its_diagnostics(self):
         self.run_cli("commands", client=self._catalog_client())
