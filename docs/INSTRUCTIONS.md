@@ -192,22 +192,31 @@ gives the same information as raw JSON, for a script that wants to assert on it.
 
 ```
 Primary — what the agent is for:
-  camera.capture - Take a still photograph with the rear camera and save it under Documents.
+  take-picture  (camera.capture) - Take a still photograph with the rear camera and save it under Documents.
       path (string, optional, default Documents/cam-remote): Destination directory, relative to the device's Documents folder.
       filename (string, optional): Bare filename. Defaults to a UTC timestamp.
       jpegQuality (int, optional, default 95): JPEG quality, 1-100.
-  camera.open - Open the device's camera app. The lens hint is best-effort and app-dependent.
+  open-camera  (camera.open) - Open the device's camera app. The lens hint is best-effort and app-dependent.
       lens (string, optional): 'front' or 'rear'. A hint only; camera apps are free to ignore it.
       package (string, optional): Open a specific camera app instead of the device default.
-  device.getprop - Read one or more Android system properties.
+  getprop  (device.getprop) - Read one or more Android system properties.
       key (string, optional): A single property name, e.g. ro.product.model.
       keys (string_list, optional): Several property names to read in one request. Takes precedence over 'key'.
 
 Diagnostics — how to inspect it:
-  camera.apps - List the camera apps this device offers, and which one camera.open would use.
-  system.commands - List every command this agent supports, with its parameters.
-  system.status - Report the device, its permissions, and whether the agent is fully set up.
+  camera-apps  (camera.apps) - List the camera apps this device offers, and which one camera.open would use.
+  commands  (system.commands) - List every command this agent supports, with its parameters.
+  status  (system.status) - Report the device, its permissions, and whether the agent is fully set up.
+
+The first name is the verb to type; the second is what the agent calls it, which is what
+appears in --json and in the device log. Parameters are the agent's own — a verb may
+expose them under a different flag, so see `camremote <verb> --help`.
 ```
+
+Two names per line, because they are two different things. The first is the CLI verb — the only
+one of the two you can type. The second is what the agent calls the command, which is what travels
+on the wire, appears under `--json`, and is logged on the device. A command the agent offers but
+this client has no verb for is still listed, marked `(no CLI verb)`.
 
 The agent declares a category per command and the client groups by it, sorting by name within each
 group. The exact set reflects whatever is registered in `AppContainer.kt` on the device, so treat

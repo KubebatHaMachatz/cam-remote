@@ -37,6 +37,7 @@ def _run(context: Context) -> int:
 
 GETPROP = CliCommand(
     name="getprop",
+    agent_command="device.getprop",
     help="Read one or more Android system properties.",
     run=_run,
     add_arguments=_configure,

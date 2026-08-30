@@ -132,12 +132,14 @@ def _apps(context: Context) -> int:
 
 CAMERA_APPS = CliCommand(
     name="camera-apps",
+    agent_command="camera.apps",
     help="List the camera apps this device offers and which one camera.open would use.",
     run=_apps,
 )
 
 OPEN_CAMERA = CliCommand(
     name="open-camera",
+    agent_command="camera.open",
     help="Open the camera app on the device.",
     run=_open,
     add_arguments=_configure_open,
@@ -145,6 +147,7 @@ OPEN_CAMERA = CliCommand(
 
 TAKE_PICTURE = CliCommand(
     name="take-picture",
+    agent_command="camera.capture",
     help="Take a still with the rear camera and download it.",
     run=_capture,
     add_arguments=_configure_capture,

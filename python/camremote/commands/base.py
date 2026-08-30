@@ -54,3 +54,10 @@ class CliCommand:
     help: str
     run: Callable[[Context], int]
     add_arguments: Callable[[argparse.ArgumentParser], None] = lambda parser: None
+
+    #: The agent command this verb invokes, if it maps onto exactly one.
+    #:
+    #: Declared here rather than in a table somewhere else so that adding a verb registers its own
+    #: mapping. `camremote commands` uses it to print the name an operator can type beside the name
+    #: the agent uses, which are not the same and never were.
+    agent_command: str | None = None

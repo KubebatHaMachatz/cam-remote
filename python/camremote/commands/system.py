@@ -230,6 +230,17 @@ def _commands(context: Context) -> int:
     response = context.agent.invoke("system.commands")
     catalog = response.data.get("commands", [])
 
+    # Built from the registry, so a verb added later maps itself without editing anything here.
+    # An agent command with no verb is still listed: the device is the authority on what it can
+    # do, and this client not having caught up is the client's problem to state, not to hide.
+    from camremote.commands import COMMANDS
+
+    verbs = {
+        command.agent_command: command.name
+        for command in COMMANDS
+        if command.agent_command is not None
+    }
+
     groups = [
         ("Primary — what the agent is for", "PRIMARY"),
         ("Diagnostics — how to inspect it", "DIAGNOSTIC"),
@@ -250,7 +261,12 @@ def _commands(context: Context) -> int:
             lines.append("")
         lines.append(f"{heading}:")
         for command in members:
-            lines.append(f"  {command['name']} - {command.get('description', '')}")
+            agent_name = command["name"]
+            verb = verbs.get(agent_name)
+            # The verb first, because it is the only one of the two an operator can type. The
+            # agent's name stays because it is what the device log, --json and the wire all use.
+            headline = f"{verb}  ({agent_name})" if verb else f"{agent_name}  (no CLI verb)"
+            lines.append(f"  {headline} - {command.get('description', '')}")
             for parameter in command.get("parameters", []):
                 required = "required" if parameter.get("required") else "optional"
                 default = parameter.get("default")
@@ -259,6 +275,15 @@ def _commands(context: Context) -> int:
                     f"      {parameter['name']} ({parameter.get('type', '?').lower()}, "
                     f"{required}{suffix}): {parameter.get('description', '')}"
                 )
+
+    lines.append("")
+    lines.append(
+        "The first name is the verb to type; the second is what the agent calls it, which is what"
+    )
+    lines.append(
+        "appears in --json and in the device log. Parameters are the agent's own — a verb may"
+    )
+    lines.append("expose them under a different flag, so see `camremote <verb> --help`.")
 
     context.emit(response.data, *lines)
     return 0
@@ -275,6 +300,7 @@ def _configure_status(parser: argparse.ArgumentParser) -> None:
 
 STATUS = CliCommand(
     name="status",
+    agent_command="system.status",
     help="Report the device, its permissions, its camera apps, its build and its catalog.",
     run=_status,
     add_arguments=_configure_status,
@@ -282,6 +308,7 @@ STATUS = CliCommand(
 
 COMMANDS = CliCommand(
     name="commands",
+    agent_command="system.commands",
     help="List the commands this device supports, straight from the device.",
     run=_commands,
 )
