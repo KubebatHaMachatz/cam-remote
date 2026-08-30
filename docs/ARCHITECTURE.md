@@ -62,12 +62,11 @@ transport tests drive real commands rather than re-inventing doubles.
 
 | Module | Holds |
 |---|---|
-| `cli.py` | Parser, agent resolution, exception-to-exit-code mapping. |
+| `cli.py` | Parser, address handling, exception-to-exit-code mapping. |
 | `client.py` | `RemoteClient`: envelopes, error mapping, downloads. |
 | `transport/` | `Transport` (the seam) and `HttpTransport` (urllib). |
-| `discovery/mdns.py` | A minimal DNS-SD browser. |
 | `commands/` | One module per verb, plus the `COMMANDS` registry. |
-| `config.py`, `models.py`, `errors.py` | Config precedence, wire-type mirrors, typed failures. |
+| `models.py`, `errors.py` | Wire-type mirrors and typed failures. |
 
 ## `LaunchActivity`, and how a permission gets granted
 
@@ -98,8 +97,9 @@ what the guaranteed fallback is.
 
 Taking `camremote take-picture --out ./shots` end to end:
 
-1. **`cli.main`** parses the arguments and resolves which agent to talk to — an explicit `--host`,
-   else the environment, else `~/.camremote.toml`, else mDNS discovery.
+1. **`cli.main`** parses the arguments and splits `--host` into an address and a port, accepting
+   the `ip:port` form the agent's notification displays. There is nothing else to resolve: the
+   address is required, so there is no discovery, no config file and no precedence order.
 2. **`RemoteClient.invoke`** builds `{"id": …, "command": "camera.capture", "params": {…}}` with a
    fresh correlation id and hands it to the transport.
 3. **`HttpTransport`** POSTs it to `/v1/command`. No credential travels with it — there is none.

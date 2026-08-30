@@ -69,10 +69,10 @@ TCP, controlling the phone from outside the LAN needs no code at all — an over
 Tailscale gives the handset a stable address reachable from anywhere.
 
 **The consequence: adb had to go entirely.** Once the transport is the network, `adb` is only a
-convenience, and keeping it would have hidden real problems. Removing it forced mDNS discovery
-instead of asking the operator for an IP address, and it turned out to be *necessary* as well as
-principled — the ColorOS handset this was developed against refuses `pm grant` and `appops set` from
-adb outright, so the shortcut would not have worked anyway.
+convenience, and keeping it would have hidden real problems. It turned out to be *necessary* as well
+as principled — the ColorOS handset this was developed against refuses `pm grant` and `appops set`
+from adb outright, so the shortcut would not have worked anyway. The agent therefore has to say
+where it is by some means the operator can read, which is why its notification shows `ip:port`.
 
 ---
 
@@ -361,22 +361,21 @@ capability is a `test:` commit followed by a `feat:` commit.
 TDD only works on code that runs in milliseconds without a device — which is exactly what the
 hexagon delivers. All the decision-making lives in `:core` with no Android imports: target
 resolution, precondition checks, path validation, key sanitising, error mapping, filename
-generation, mDNS parsing, address ranking. Every port has a fake. That is 171 tests in `:core` that
-run in about a second, plus 10 in `:app` for the transport routes, and 77 for the
-Python client.
+generation, address ranking. Every port has a fake. That is 171 tests in `:core` that run in about a
+second, plus 10 in `:app` for the transport routes, and 48 for the Python client.
 
 The adapters left over are three-to-ten-line pass-throughs with no branching. `CameraAppLaunch` is
 the clearest case: a pure function produces a `LaunchSpec` — tested against the no-camera-app and
 missing-permission cases — and a trivial shell turns it into an `Intent`. `LaunchActivity` is the one
 genuinely untestable piece by this method: it is Android-framework glue by nature (requesting
 permissions, launching Settings intents, no decisions of its own to unit-test), verified instead on a
-real handset alongside the camera and mDNS pieces below.
+real handset alongside the camera work below.
 
 **Three things this structurally cannot cover**, named rather than papered over:
 
 1. that a real sensor produces a real JPEG,
 2. that the OS permits the background activity launch on a given Android version,
-3. that mDNS traverses a physical network.
+3. that the agent is reachable across a physical network at all.
 
 Those are the seven instrumented tests and the manual run, and both were done on real handsets — a
 Realme RMX3563 and a Samsung Galaxy S24, both Android 14. The instrumented capture test asserts the
@@ -388,10 +387,6 @@ from the shell — so the suite attempts the grant and skips the camera test wit
 rather than failing every test in the class. And an app may not make cleartext HTTP requests since
 API 28, so the test that connects to its own server speaks HTTP over a bare socket rather than
 loosening the shipped app's network policy to suit a test.
-
-The mDNS parser is tested against a **real 274-byte response captured from the handset**, not a
-packet written to match the parser — so it meets genuine compression pointers and a SRV record whose
-target is resolved by a separate A record.
 
 ---
 
@@ -409,16 +404,22 @@ read together.
 agent could not be reached. A script needs to tell "the phone said no" from "the phone was not
 there".
 
-**`pair` is a convenience, not a login.** It confirms the agent answers `/v1/health` and writes its
-address to `~/.camremote.toml`, purely so later commands skip the mDNS round trip. There is nothing
-to claim and nothing that expires — running it twice, or never, changes nothing about what commands
-you can send.
+**The agent's address is a required argument**, and that is the second design decision this client
+has reversed on evidence. It once browsed for `_camremote._tcp` over mDNS and had a `pair` verb that
+saved what it found. Both are gone. The browser worked — its parser handled real compression
+pointers and a SRV record resolved by a separate A record — but the handsets did not: the Galaxy S24
+announces its record on registration and then answers no query at all, so discovery succeeded for a
+few seconds after the app started and never afterwards. `docs/DEVICES.md` records the measurements.
 
-The **mDNS browser** is the one substantial piece. Only the browsing half is implemented — enough to
-ask one question and read the answer. Queries set the unicast-response bit so replies arrive on an
-ephemeral port, avoiding a fight with the system responder that already owns port 5353 on macOS. Every
-parsing function is total: anything on the network can send anything to that socket, so a malformed
-datagram yields no results rather than a stack trace mid-command.
+Keeping it would have meant a client that usually cannot find a device and a `pair` verb whose saved
+address goes stale the next time DHCP moves the phone. An address that is sometimes found is worse
+than one that is always typed — particularly when the agent already displays its own `ip:port` in a
+notification, which is four numbers read off a screen the operator is holding anyway. Roughly four
+hundred lines went with the decision, including the whole mDNS implementation and the config file
+that existed to remember its results.
+
+The agent still advertises itself, so a Bonjour browser finds it and a future client on a better
+behaved platform could use that. Nothing in the shipped control application depends on it.
 
 ---
 

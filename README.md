@@ -7,24 +7,21 @@ those commands from another machine.
 Written for the pre-interview assignment in [`pre_interview_assignment.md`](pre_interview_assignment.md).
 
 ```
-$ camremote discover
-realme RMX3563 at 10.0.0.4:8099
-
-$ camremote getprop ro.product.model ro.build.version.release
+$ camremote --host 10.0.0.4 getprop ro.product.model ro.build.version.release
 ro.product.model         = RMX3563
 ro.build.version.release = 14
 
-$ camremote open-camera
+$ camremote --host 10.0.0.4 open-camera
 Opened com.oplus.camera/com.oplus.camera.component.CameraImageActivity
 
-$ camremote take-picture --out ./shots --filename cli-demo
+$ camremote --host 10.0.0.4 take-picture --out ./shots --filename cli-demo
 Captured 2448x3264, 2.98 MB in 1538 ms
 On the device: Documents/cam-remote/cli-demo.jpg
 Saved to: shots/cli-demo.jpg
 ```
 
-That output is real, from a Realme RMX3563 running Android 14 (API 34). No pairing step ran first —
-none is needed.
+That output is real, from a Realme RMX3563 running Android 14 (API 34). The address is the one the
+agent shows in its own notification; nothing had to be paired, saved or discovered first.
 
 ## What it does
 
@@ -35,8 +32,8 @@ none is needed.
 | 3. Fetch device property data | `camremote getprop KEY...` | Reads any number of properties in one round trip |
 | 4. Control application | `camremote` | Pure standard library; nothing to install |
 
-Plus `discover`, `pair`, `status`, `commands`, `camera-apps`, `device-report` and `system-ping`
-for finding, remembering, inspecting and surveying an agent.
+Plus `status`, `commands`, `camera-apps`, `device-report` and `system-ping` for inspecting and
+surveying an agent.
 
 ## No adb, no UI, no pairing code
 
@@ -51,8 +48,11 @@ there is nothing to configure before it starts serving commands. Three things fo
   it exists only to host the native Android dialogs Android itself requires, and it appears exactly
   when a command needs something the device has not granted yet. See
   [Set up the device](#set-up-the-device) below.
-- **Discovery is automatic.** `camremote discover` finds the agent over mDNS; nothing has to be typed
-  on the phone to make that work.
+- **The address is typed, not discovered.** Every command takes `--host`, and the agent puts its own
+  `host:port` in its notification so it can be read straight off the phone. There was an mDNS
+  discovery step; it was removed after proving unreliable across the handsets this was tested on —
+  [docs/DEVICES.md](docs/DEVICES.md#why-the-client-does-not-discover-the-agent) records what went wrong. An
+  address that is sometimes found is worse than one that is always typed.
 
 This also means the project works on handsets where `adb shell pm grant` is blocked outright, which
 the ColorOS device this was built against turned out to be.
@@ -116,40 +116,35 @@ happens: not a separate setup ritual, but a consequence of the first command tha
 
 ## Find the agent
 
-```bash
-camremote discover
+Pull down the notification shade on the phone. The agent's ongoing notification reads:
+
 ```
-```
-realme RMX3563 at 10.0.0.4:8099
+cam-remote
+Accepting commands on 10.0.0.4:8099
 ```
 
-If nothing answers — common on networks that block multicast — pull down the notification shade on
-the phone: the agent's ongoing notification always shows its current `ip:port`. Pass it directly:
-
-```bash
-camremote --host 10.0.0.4 status
-```
-
-Optionally, remember it so you do not have to type `--host` every time:
+That address is what every command needs, and `--host` accepts it exactly as written:
 
 ```bash
-camremote pair
-```
-```
-Found realme RMX3563 at http://10.0.0.4:8099
-Address saved to /Users/you/.camremote.toml
+camremote --host 10.0.0.4:8099 status
+camremote --host 10.0.0.4 status        # the port defaults to 8099
 ```
 
-No code, no handshake — `pair` here just confirms the agent answers and writes its address to
-`~/.camremote.toml`. `scripts/camremote` is a small wrapper that puts the package on the import
-path; `cd python && python3 -m camremote …` is exactly equivalent, and `pip install ./python` gives
-you a `camremote` command if you prefer.
+There is no discovery step and nothing to pair. The agent still advertises itself over mDNS, so a
+Bonjour browser will see it, but the client no longer relies on that: it was unreliable on the
+handsets this was tested against, and reading four numbers off a notification is not the part of
+this problem worth automating. [docs/DEVICES.md](docs/DEVICES.md#why-the-client-does-not-discover-the-agent) has
+the details if you want them.
+
+`scripts/camremote` is a small wrapper that puts the package on the import path; `cd python &&
+python3 -m camremote …` is exactly equivalent, and `pip install ./python` gives you a `camremote`
+command if you prefer.
 
 ## Usage
 
+Every one of these needs `--host`; it is left out below only so the lines stay readable.
+
 ```bash
-camremote discover                      # find agents over mDNS
-camremote pair                          # remember the agent's address (optional)
 camremote status                        # device, permissions, readiness
 camremote commands                      # the catalog, straight from the device
 camremote getprop ro.product.model      # one property, or several at once
@@ -162,8 +157,9 @@ camremote camera-apps                   # every camera app, and which one open-c
 camremote device-report --out d.json    # everything about a device, for a compatibility matrix
 ```
 
-Global options: `--host`, `--port`, `--timeout`, `--config`, and `--json` for machine-readable
-output.
+So a real invocation is `camremote --host 10.0.0.4 status`, and `--host` accepts the `ip:port` form
+the notification shows. The other global options are `--port` (when the address does not already
+name one), `--timeout`, and `--json` for machine-readable output.
 
 Exit codes, for scripting:
 
@@ -182,7 +178,7 @@ it; `docs/DEVICES.md` covers those.
 
 ```bash
 cd android && ./gradlew :core:test :app:testDebugUnitTest   # 181 unit tests
-cd python  && python3 -m unittest discover -s tests -t .    # 77 unit tests
+cd python  && python3 -m unittest discover -s tests -t .    # 48 unit tests
 ```
 
 Both suites run on a desktop with no device attached and no packages installed. The Python tests use
@@ -202,11 +198,11 @@ See [docs/DESIGN.md](docs/DESIGN.md#10-testing) for why the split falls exactly 
 
 | Symptom | Cause and fix |
 |---|---|
-| `discover` finds nothing | Many networks block multicast and guest networks isolate clients entirely. Pull down the notification shade on the phone for the address and pass `--host 10.0.0.x`. |
+| Nothing answers on `--host` | Check the address against the agent's notification: DHCP may have moved the phone. Confirm with `curl http://<ip>:8099/v1/health`. |
 | `PRECONDITION_FAILED` from `open-camera` | "Display over other apps" is not granted. Tap the app's icon (or its notification) to be walked through what is still missing. |
 | `DEVICE_ERROR: No installed app handles any known camera intent (tried ...)` | The device has no camera app — common on bare AOSP images. `take-picture` still works; it drives the sensor directly. See [docs/DEVICES.md](docs/DEVICES.md). |
 | `PERMISSION_DENIED` from `take-picture` | The camera permission is missing. `camremote status` lists exactly what is missing, and the command itself tries to prompt the device for it. |
-| `TIMEOUT` from `take-picture` | Something else holds the camera — most often the camera app that `open-camera` just launched. Close it and retry. |
+| `TIMEOUT` from `take-picture` | Something else holds the camera — most often the camera app that `open-camera` just launched. Close it and retry. If it persists right after granting the camera permission, reopen cam-remote once: a foreground service's type is fixed when it starts, and reopening lets it re-assert now that the permission exists. |
 | Stops answering when the screen is off | Grant "Ignore battery optimisation" (tap the app's icon to be prompted for it). Some OEM builds (Xiaomi, Huawei, realme) kill background services regardless of Android's own rules; on those, add cam-remote to the vendor's own protected-apps list. |
 | Nothing answers, agent seemingly not running | Tap the app's icon: it restarts an agent the system has killed. It also restarts itself after a reboot, once it has been opened at least once. |
 

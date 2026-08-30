@@ -6,8 +6,10 @@ least once (camera permission, notifications, "Display over other apps" and the 
 all granted) — see the [README](../README.md#set-up-the-device) if that part is not done yet. There
 is no separate "switch the agent on" step: opening the app starts it.
 
-Every command below is `python -m camremote <subcommand>` or the equivalent `./scripts/camremote
-<subcommand>` wrapper. Run from the repository root; the wrapper handles the import path for you.
+Every command below is `python -m camremote --host <address> <subcommand>` or the equivalent
+`./scripts/camremote --host <address> <subcommand>` wrapper. Run from the repository root; the
+wrapper handles the import path for you. Where the address comes from is
+[section 1](#1-reading-the-agents-address-off-the-phone).
 
 ```bash
 cd cam-remote
@@ -19,10 +21,9 @@ Global flags, valid before the subcommand name, apply to every command below:
 
 | Flag | Meaning |
 |---|---|
-| `--host` | Agent address. Skips mDNS discovery when given. |
-| `--port` | Agent port. Default `8099`. |
-| `--timeout` | Seconds to wait for a reply. Default `60`. |
-| `--config` | Config file path. Default `~/.camremote.toml`. |
+| `--host` | **Required.** The agent's address, as shown in the notification on the device. Accepts a bare address (`10.0.0.4`) or one carrying a port (`10.0.0.4:8099`). |
+| `--port` | Agent port. Default `8099`. Ignored when `--host` already names a port. |
+| `--timeout` | Seconds to wait for a reply. Default `60` — generous, because a capture legitimately takes seconds. |
 | `--json` | Print the agent's raw JSON instead of the human-readable summary. |
 
 Exit codes, useful when scripting a check:
@@ -43,77 +44,52 @@ Check the exit code of any command with `echo $?` immediately after running it.
 - Python 3.11+, nothing else installed (`python3 --version` to confirm).
 - The phone and this machine on the same Wi-Fi network.
 - The app opened on the phone at least once, so the agent is running and its permissions are
-  granted — skip ahead to [`status`](#3-status--confirm-the-device-and-its-readiness) to check.
+  granted — skip ahead to [`status`](#2-status--confirm-the-device-and-its-readiness) to check.
 
 ---
 
-## 1. `discover` — find the agent on the network
+## 1. Reading the agent's address off the phone
+
+There is no discovery step and nothing to pair: the client never guesses which agent it is talking
+to, so `--host` is required on every command below. That sounds like extra typing, and it is, but it
+buys certainty — a client that only ever talks to the address you gave it cannot quietly attach
+itself to the wrong handset, and there is no stale saved address to go looking for when something
+stops answering.
+
+The address is on the phone. Pull down the notification shade; the agent's ongoing notification
+reads:
+
+```
+Accepting commands on 10.0.0.4:8099
+```
+
+Pass that string to `--host` exactly as it appears — the whole `host:port` pair is accepted, so
+there is nothing to take apart:
 
 ```bash
-./scripts/camremote discover
+./scripts/camremote --host 10.0.0.4:8099 status
 ```
 
-**What it does:** sends an mDNS query for `_camremote._tcp` and lists every agent that answers, for
-up to 3 seconds (`--timeout` to change it).
-
-**Expected output:**
-
-```
-realme RMX3563 at 10.0.0.4:8099
-```
-
-**How to verify:** the IP address printed should match the address shown in the phone's
-notification shade ("Accepting commands on `<ip>:<port>`"). If they differ, something else on the
-network is also serving the service type — unlikely, but worth a second look.
-
-**If nothing is printed and the exit code is `3`:** this is a normal result on networks that block
-multicast (many corporate and guest Wi-Fi networks do). It does **not** mean the agent is broken —
-read the address directly off the phone's screen and pass it explicitly to every later command with
-`--host <ip>`, e.g. `./scripts/camremote --host 10.0.0.4 status`.
+A bare address works too, and falls back to the default port `8099`:
 
 ```bash
-./scripts/camremote --json discover     # machine-readable form
+./scripts/camremote --host 10.0.0.4 status
 ```
+
+The two are equivalent as long as the agent is on the default port. When the address carries a port
+it wins outright — `--port` is only consulted when the address does not already name one, so
+`--host 10.0.0.4:8099 --port 9000` still talks to `8099`.
+
+The examples from here on use `10.0.0.4`, the realme handset this walkthrough was written against.
+Substitute whatever your own notification says; the address changes whenever the phone's DHCP lease
+does, so it is worth re-reading the shade rather than trusting a value from yesterday.
 
 ---
 
-## 2. `pair` — remember the agent's address
-
-No physical action on the phone is needed for this one — there is no code, no token, no handshake.
-`pair` just confirms the agent answers and writes its address to disk so later commands do not pay
-the mDNS round trip every time.
+## 2. `status` — confirm the device and its readiness
 
 ```bash
-./scripts/camremote pair
-```
-
-**Expected output:**
-
-```
-Found realme RMX3563 at http://10.0.0.4:8099
-Address saved to /Users/you/.camremote.toml
-```
-
-**How to verify:**
-
-```bash
-cat ~/.camremote.toml
-```
-
-should show a `host` and `port` matching the address `discover` reported. Every command after this
-point uses it automatically without needing `--host` — but skipping `pair` entirely also works fine,
-since every command falls back to a live discovery when nothing is configured.
-
-**If it fails with `Could not reach the agent`:** the address in `--host` (or a stale
-`~/.camremote.toml`) does not answer. Run `discover` again, or pull down the notification shade on
-the phone for the current address.
-
----
-
-## 3. `status` — confirm the device and its readiness
-
-```bash
-./scripts/camremote status
+./scripts/camremote --host 10.0.0.4 status
 ```
 
 **Expected output (fully set up):**
@@ -138,17 +114,17 @@ Run this first after any setup change — it is the fastest way to confirm a per
 took effect before testing the command that depends on it.
 
 ```bash
-./scripts/camremote --json status
+./scripts/camremote --host 10.0.0.4 --json status
 ```
 gives the full JSON, including every individual permission flag (`camera`, `notifications`,
 `canDrawOverlays`, `ignoringBatteryOptimizations`) rather than just the missing list.
 
 ---
 
-## 4. `system-ping` — liveness and clock check
+## 3. `system-ping` — liveness and clock check
 
 ```bash
-./scripts/camremote system-ping
+./scripts/camremote --host 10.0.0.4 system-ping
 ```
 
 **Expected output:**
@@ -170,10 +146,10 @@ timestamps later.
 
 ---
 
-## 5. `commands` — the live command catalog
+## 4. `commands` — the live command catalog
 
 ```bash
-./scripts/camremote commands
+./scripts/camremote --host 10.0.0.4 commands
 ```
 
 **Expected output:**
@@ -205,10 +181,10 @@ should appear here automatically. That is the extensibility claim; this command 
 
 ---
 
-## 6. `getprop` — the assignment's property-fetch requirement
+## 5. `getprop` — the assignment's property-fetch requirement
 
 ```bash
-./scripts/camremote getprop ro.product.model
+./scripts/camremote --host 10.0.0.4 getprop ro.product.model
 ```
 
 **Expected output:**
@@ -224,7 +200,7 @@ ro.product.model`.
 **Several properties in one request:**
 
 ```bash
-./scripts/camremote getprop ro.product.manufacturer ro.build.version.release ro.build.version.sdk
+./scripts/camremote --host 10.0.0.4 getprop ro.product.manufacturer ro.build.version.release ro.build.version.sdk
 ```
 
 ```
@@ -239,7 +215,7 @@ should not take noticeably longer than a single-property request.
 **An unset property:**
 
 ```bash
-./scripts/camremote getprop ro.this.does.not.exist
+./scripts/camremote --host 10.0.0.4 getprop ro.this.does.not.exist
 ```
 
 ```
@@ -253,7 +229,7 @@ absent property as `null` rather than an empty string, since `getprop` cannot ot
 **Rejected input — a property name is not free text:**
 
 ```bash
-./scripts/camremote getprop "ro.product.model; reboot"
+./scripts/camremote --host 10.0.0.4 getprop "ro.product.model; reboot"
 ```
 
 ```
@@ -266,10 +242,10 @@ half of the assignment for this command.
 
 ---
 
-## 7. `open-camera` — the assignment's "open a camera" requirement
+## 6. `open-camera` — the assignment's "open a camera" requirement
 
 ```bash
-./scripts/camremote open-camera
+./scripts/camremote --host 10.0.0.4 open-camera
 ```
 
 **Expected output:**
@@ -285,16 +261,16 @@ manufacturer (Samsung: `com.sec.android.app.camera/...`); see [DEVICES.md](DEVIC
 expect from a given OEM.
 
 ```bash
-./scripts/camremote --json open-camera
+./scripts/camremote --host 10.0.0.4 --json open-camera
 ```
 adds `strategy` and `preinstalled`/`defaultHandler` fields — useful when comparing behaviour across
-devices; see [`camera-apps`](#8-camera-apps--diagnose-which-camera-app-would-be-chosen) below for the
+devices; see [`camera-apps`](#7-camera-apps--diagnose-which-camera-app-would-be-chosen) below for the
 full picture without actually opening anything.
 
 **With a lens hint:**
 
 ```bash
-./scripts/camremote open-camera --lens front
+./scripts/camremote --host 10.0.0.4 open-camera --lens front
 ```
 
 Best-effort only — the camera app decides whether to honour it. Verify by eye whether the front or
@@ -313,10 +289,10 @@ apps, or tap the app's icon to be walked through it), then retry.
 
 ---
 
-## 8. `camera-apps` — diagnose which camera app would be chosen
+## 7. `camera-apps` — diagnose which camera app would be chosen
 
 ```bash
-./scripts/camremote camera-apps
+./scripts/camremote --host 10.0.0.4 camera-apps
 ```
 
 **Expected output:**
@@ -338,12 +314,12 @@ picked without triggering a launch.
 
 ---
 
-## 9. `take-picture` — the assignment's rear-camera capture requirement
+## 8. `take-picture` — the assignment's rear-camera capture requirement
 
 This is the command that most needs the resulting file inspected, not just the terminal output.
 
 ```bash
-./scripts/camremote take-picture --out ./shots
+./scripts/camremote --host 10.0.0.4 take-picture --out ./shots
 ```
 
 **Expected output:**
@@ -381,7 +357,7 @@ Saved to: shots/camremote-20260828-191555-123.jpg
 **With options:**
 
 ```bash
-./scripts/camremote take-picture --out ./shots --filename door --quality 60 --path reports
+./scripts/camremote --host 10.0.0.4 take-picture --out ./shots --filename door --quality 60 --path reports
 ```
 
 ```
@@ -405,7 +381,7 @@ folder, put there by an app holding no storage permission of any kind.
 **Leaving the photo on the device:**
 
 ```bash
-./scripts/camremote take-picture --no-download
+./scripts/camremote --host 10.0.0.4 take-picture --no-download
 ```
 
 The output stops after the "On the device:" line — no "Saved to:" line, and nothing appears in
@@ -414,7 +390,7 @@ The output stops after the "On the device:" line — no "Saved to:" line, and no
 **A destination that escapes Documents (should be rejected):**
 
 ```bash
-./scripts/camremote take-picture --path /etc
+./scripts/camremote --host 10.0.0.4 take-picture --path /etc
 ```
 
 ```
@@ -424,7 +400,7 @@ error [INVALID_PARAMS]: Parameter 'path' is a directory inside 'Documents', not 
 Traversal is refused the same way, and neither reaches the sensor — no photograph is taken:
 
 ```bash
-./scripts/camremote take-picture --path ../../escape
+./scripts/camremote --host 10.0.0.4 take-picture --path ../../escape
 ```
 
 Exit code `1`, and — importantly — nothing should have been written anywhere on the device. This
@@ -444,10 +420,10 @@ home button) and retry — it should now succeed in a couple of seconds.
 
 ---
 
-## 10. `device-report` — everything about a device in one go
+## 9. `device-report` — everything about a device in one go
 
 ```bash
-./scripts/camremote device-report --out matrix/my-device.json
+./scripts/camremote --host 10.0.0.4 device-report --out matrix/my-device.json
 ```
 
 **Expected output:** a longer, sectioned summary — device model and Android version, rear-camera
@@ -474,60 +450,64 @@ Run it with `--json` for the raw combined blob on stdout instead of (or in addit
 file:
 
 ```bash
-./scripts/camremote --json device-report
+./scripts/camremote --host 10.0.0.4 --json device-report
 ```
 
 ---
 
-## 11. Verifying failure paths deliberately
+## 10. Verifying failure paths deliberately
 
 A command that only ever succeeds hasn't been tested. These are worth running once to confirm the
 agent's error-reporting behaves as documented, not just its happy path.
 
 **Confirm there really is no credential to get wrong** — any client on the same network can run any
-command, with nothing to type:
+command, with no token, code or handshake to present:
 
 ```bash
 ./scripts/camremote --host 10.0.0.4 system-ping
 ```
 
-should succeed with no prior `pair` and no config file at all. This is the trade recorded in
-[DESIGN.md §7](DESIGN.md#7-security): the project assumes one agent and one client share the LAN, so
-there is no gate to get past, correctly or otherwise.
+should succeed on a machine that has never run `camremote` before, with nothing but the address to
+type. This is the trade recorded in [DESIGN.md §7](DESIGN.md#7-security): the project assumes one
+agent and one client share the LAN, so there is no gate to get past, correctly or otherwise.
 
-**No config and no `--host`, agent unreachable by discovery:**
+**Omitting `--host` entirely:**
 
 ```bash
-mv ~/.camremote.toml /tmp/camremote-backup.toml
 ./scripts/camremote status
 ```
 ```
-error: No agent configured and none found on this network. Run 'camremote discover', or pass --host <address>.
-```
-Exit code `3` — confirms the client refuses to guess an agent rather than silently talking to
-whatever answers. Restore the config afterward:
-```bash
-mv /tmp/camremote-backup.toml ~/.camremote.toml
-```
+the following arguments are required: --host
 
-**Unreachable host:**
+usage: camremote [-h] --host ADDRESS [--port PORT] [--timeout TIMEOUT]
+                 [--json]
+                 COMMAND ...
+```
+Exit code `2` — a usage error, raised by the argument parser before anything touches the network.
+This is the client refusing to guess: with no discovery and nothing saved on disk, there is no
+address it could fall back to, and inventing one would only mean talking to whatever happened to
+answer.
+
+**A wrong or stale address:**
 
 ```bash
 ./scripts/camremote --host 10.255.255.1 status
 ```
 ```
-error: Could not reach the agent at 10.255.255.1:8099 (...). Check the device is on the same network with the agent switched on.
-  Found these agents on the network:
-    realme RMX3563 at 10.0.0.4:8099  ->  --host 10.0.0.4
+error: Could not reach the agent at 10.255.255.1:8099 (timed out). Check the device is on the same network with the agent switched on.
+  The address comes from the agent's notification on the device; check the phone is awake and on the same network.
 ```
-Exit code `3`. The suggestion line only appears if a real agent answers mDNS in the background —
-confirms the "point me at what's actually there" behaviour described in
-[DEVICES.md](DEVICES.md#diagnosing-a-new-device).
+Exit code `3` — a transport failure, distinct from exit `2` above because the command line was fine
+and the network was not. The same result appears when a previously good address has gone stale, which
+is the common case: the phone took a new DHCP lease, or dropped off Wi-Fi while asleep. Wake the
+handset, pull down the notification shade, and use whatever address it now reports. Note that the
+timeout is the full `--timeout` (60 seconds by default), so pass a smaller one when deliberately
+testing this path.
 
 **Unknown command:**
 
 ```bash
-./scripts/camremote teleport
+./scripts/camremote --host 10.0.0.4 teleport
 ```
 Exit code `2`, with usage text — confirms bad input is rejected before any network call is made.
 
@@ -536,11 +516,16 @@ Exit code `2`, with usage text — confirms bad input is rejected before any net
 ## Quick reference: one command per assignment requirement
 
 ```bash
-./scripts/camremote open-camera                      # 1. Open a camera
-./scripts/camremote take-picture --out ./shots        # 2. Open a camera and take a picture (rear only)
-./scripts/camremote getprop ro.product.model          # 3. Fetch device property data
-./scripts/camremote --help                            # 4. The control application itself
+./scripts/camremote --host 10.0.0.4 open-camera                   # 1. Open a camera
+./scripts/camremote --host 10.0.0.4 take-picture --out ./shots    # 2. Open a camera and take a picture (rear only)
+./scripts/camremote --host 10.0.0.4 getprop ro.product.model      # 3. Fetch device property data
+./scripts/camremote --help                                        # 4. The control application itself
 ```
 
 `scripts/demo.sh` runs all of the above in sequence, with pauses where a manual step (closing the
-camera app before capture) is needed.
+camera app before capture) is needed. It takes the agent's address as its only argument — the same
+string the notification shows — and passes it through as `--host`:
+
+```bash
+./scripts/demo.sh 10.0.0.4
+```

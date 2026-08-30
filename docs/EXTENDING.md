@@ -113,7 +113,7 @@ and one line in `python/camremote/commands/__init__.py`:
 
 ```python
 COMMANDS = (
-    DISCOVER, PAIR, STATUS, PING, LIST_COMMANDS, GETPROP,
+    STATUS, PING, LIST_COMMANDS, GETPROP,
     OPEN_CAMERA, CAMERA_APPS, TAKE_PICTURE, DEVICE_REPORT, REBOOT,
 )
 ```
@@ -287,14 +287,18 @@ Three things that are easy to get wrong:
 
 ### The client side
 
-One header in `HttpTransport`, and the token in `~/.camremote.toml` next to the host and port:
+One header in `HttpTransport`, and a `--token` alongside `--host`:
 
 ```python
 if self._token:
     request.add_header("Authorization", f"Bearer {self._token}")
 ```
 
-`config.save()` should then `chmod 0600` — it did exactly that until the secret went away.
+A secret typed on every command line is worse than one stored, so this is the point at which the
+client would want a config file again. It had one — `~/.camremote.toml`, written by a `pair` verb —
+and it was removed with mDNS discovery, because remembering an address is not worth a file when the
+address is required anyway. A secret is a better reason for that file than an address ever was; the
+deleted `config.py` is in the history, and it chmod'd the file to 0600 for exactly this case.
 
 ### How the secret gets there
 

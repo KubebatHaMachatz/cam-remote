@@ -133,20 +133,12 @@ most of them surprising:
 - Knox-managed devices may block the overlay permission by policy. On those, `camera.capture`,
   `device.getprop` and `system.status` still work, and `camera.open` reports `PRECONDITION_FAILED`
   accurately.
-- **Discovery does not work here except immediately after the agent starts.** The registration
-  itself is fine — `NsdServiceAdvertiser` logs `Advertising cam-remote samsung SM-S921B on
-  _camremote._tcp port 8099`, and One UI announces the record on registration — but the device then
-  answers no `_camremote._tcp` query at all. Measured with the client's own sockets: 123 mDNS
-  packets received in fifteen seconds, **none of them from the handset**, while `--host` worked
-  every time. So `camremote discover` finds it within a few seconds of the app starting and
-  effectively never afterwards. Neither a QU nor a plain QM query changes it, and neither does the
-  multicast lock the agent now holds.
-
-  It is most likely One UI suppressing the responder for a backgrounded app, of a piece with the
-  "Sleeping apps" behaviour below, but that is not proven. Until it is, treat discovery on this
-  handset as best-effort: `--host` is not a fallback here so much as the supported route, and
-  `camremote discover` is worth running only right after opening the app. Restarting the app on the
-  phone is a reliable way to make it discoverable for a demo.
+- **This is the handset that cost the client its discovery feature.** The registration itself is
+  fine — `NsdServiceAdvertiser` logs `Advertising cam-remote samsung SM-S921B on _camremote._tcp
+  port 8099`, and One UI announces the record — but the device then answers no `_camremote._tcp`
+  query at all: 123 mDNS packets received in fifteen seconds, **none of them from the handset**.
+  Neither a QU nor a plain QM query changes it, and neither does the multicast lock the agent now
+  holds. See [below](#why-the-client-does-not-discover-the-agent) for the full account.
 
 - **Testing the on-demand prompt via repeated `adb shell pm revoke`/`am force-stop` cycles is
   misleading.** After several rapid denials in a row, Android silently auto-resolves the next
@@ -270,7 +262,7 @@ Start with one command, which gathers everything and keeps going even when part 
 broken:
 
 ```bash
-camremote device-report --out matrix/samsung-s24.json
+camremote --host <ip> device-report --out matrix/samsung-s24.json
 ```
 
 It reports the device and build, every permission that is missing, every camera app present and
@@ -281,56 +273,62 @@ ending it, because a diagnostic that only runs on healthy devices is not much us
 Then, if something specific needs pinning down:
 
 ```bash
-camremote discover              # if silent, see below before blaming the network
-camremote status                # names every missing permission
-camremote camera-apps           # every camera app, and which one would be chosen
-camremote --json open-camera    # 'strategy' says which intent the device answered
-camremote take-picture          # independent of the camera app entirely
+camremote --host <ip> status              # names every missing permission
+camremote --host <ip> camera-apps         # every camera app, and which one would be chosen
+camremote --host <ip> --json open-camera  # 'strategy' says which intent the device answered
+camremote --host <ip> take-picture        # independent of the camera app entirely
 ```
 
-## When discovery finds nothing
+## Why the client does not discover the agent
 
-`camremote discover` going quiet is usually read as "this network blocks multicast", and that is
-often true — but three other things caused it during development, and all three look identical from
-the outside. Work down this list before blaming the access point.
+The control application once browsed for `_camremote._tcp` over mDNS and had a `pair` verb that
+saved what it found. Both were removed, along with the whole browser, and `--host` is now required.
+This is the evidence, because "we tried mDNS and it did not work" is worth rather less than the
+measurements, and because anyone reviving the idea should start from them.
 
-**Is the agent actually reachable?** This separates "cannot be found" from "is not running", and
-costs one command:
+**Two of the three faults were ours, and both are easy to reintroduce.**
 
-```bash
-curl -s http://<device-ip>:8099/v1/health
-```
-
-**Does the host's own resolver see it?** On macOS, `dns-sd` is an independent second opinion:
-
-```bash
-dns-sd -B _camremote._tcp local
-```
-
-If `dns-sd` finds it and `camremote discover` does not, the fault is the client, not the network.
-Note that `dns-sd` answers from `mDNSResponder`'s cache, so a hit does not prove the handset is
-answering *now* — a point that cost an afternoon.
-
-**Is the responder answering, or only announcing?** Restart the app on the handset and run
-`camremote discover` within a few seconds. If it is found then but not a minute later, the device is
-announcing on registration and ignoring queries afterwards — see the One UI note above.
-
-Two client-side bugs behind this are worth knowing, because both are easy to reintroduce:
-
-- **Listening only for a unicast reply is not enough.** Queries set the QU bit, but RFC 6762 §5.4
-  lets a responder answer by multicast anyway if it has not multicast that record recently, and
-  Android's responder does exactly that. The client listens on both its own port and the group.
+- **Listening only for a unicast reply is not enough.** Queries set the QU bit, and the client
+  listened only on its own ephemeral port on the reasoning that this avoids contending for port 5353
+  with the system responder. RFC 6762 §5.4 lets a responder answer a QU query by multicast anyway if
+  it has not multicast that record recently, and Android's responder does exactly that: a 564-byte
+  answer was captured going to `224.0.0.251:5353` while the client heard nothing.
 - **Joining the multicast group on `INADDR_ANY` can receive nothing at all.** On macOS the kernel
   picks a default interface that need not be the one carrying mDNS. Measured on a Mac with one
   active Wi-Fi interface: an `INADDR_ANY` join received **0 packets in twelve seconds**, while a
-  join pinned to that same interface received **63**. The client now resolves the interface and
-  pins both sockets to it.
+  join pinned to that same interface received **63**.
+
+**The third was the handset, and it is the one that ended the feature.** With both client bugs fixed
+and the agent holding a multicast lock, the Galaxy S24 announced its record on registration and then
+answered no `_camremote._tcp` query at all: 123 mDNS packets received in fifteen seconds, none of
+them from the phone, while `--host` worked every time. Discovery therefore succeeded for a few
+seconds after the app started and effectively never afterwards. The cause is most likely One UI
+suppressing the responder for a backgrounded app — of a piece with the "Sleeping apps" behaviour
+above — but that was never proven.
+
+A client that usually cannot find the device is worse than one that always asks, especially when the
+agent already displays its own `ip:port` in a notification. So the agent still advertises itself —
+a Bonjour browser finds it, and a future client on a better-behaved platform could use that — and
+nothing in the shipped control application depends on it.
+
+### If you want to investigate it again
+
+```bash
+curl -s http://<device-ip>:8099/v1/health   # separates "not found" from "not running"
+dns-sd -B _camremote._tcp local             # an independent second opinion on macOS
+```
+
+`dns-sd` answers from `mDNSResponder`'s cache, so a hit there does **not** prove the handset is
+replying now — the single most misleading signal in this whole investigation, and the one that cost
+an afternoon. To see what the device actually emits, restart the app and watch the announcement
+burst; if the record appears then but no query is answered a minute later, you are looking at the
+same behaviour described above.
 
 ## Adding a device to the matrix
 
 Worth recording, because it is the sort of thing that is expensive to rediscover:
 
-Run `camremote device-report --out matrix/<device>.json` on each new handset and add a row:
+Run `camremote --host <ip> device-report --out matrix/<device>.json` on each new handset and add a row:
 
 | Device | Android | Camera package | Strategy that worked | Capture | Notes |
 |---|---|---|---|---|---|
