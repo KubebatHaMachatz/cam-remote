@@ -5,6 +5,7 @@ the rear camera, and read device properties — together with a Python control a
 those commands from another machine.
 
 Written for the pre-interview assignment in [`pre_interview_assignment.md`](pre_interview_assignment.md).
+**Just want to run it?** [docs/quick-start.md](docs/quick-start.md) is a page and a half.
 
 ```
 $ camremote --host 10.0.0.4 getprop ro.product.model ro.build.version.release
@@ -222,6 +223,7 @@ new transport rather than a new feature, and
 
 | Document | What it covers |
 |---|---|
+| [docs/quick-start.md](docs/quick-start.md) | Install, grant, run — the shortest path to a photograph |
 | [docs/DESIGN.md](docs/DESIGN.md) | Every significant decision and why it was made, including the ones rejected |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The layout of the code and the path a request takes through it |
 | [docs/EXTENDING.md](docs/EXTENDING.md) | Adding a command, adding a transport, swapping an implementation |
