@@ -31,8 +31,7 @@ Emphasis should be placed on code planning, design, and ensuring that the applic
   - Handle permissions for camera access and storage access securely.
   - Capture an image and save it to a specified location.
   - Return the fetched property to the remote client.
-
-> Note: The last bullet above appears exactly this way in the original assignment and may be a copy/paste error.
+ 
 
 ## 3. Fetch device property data (GetProp)
 
