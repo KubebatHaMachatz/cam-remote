@@ -9,15 +9,22 @@ full responder is a large piece of software and none of it is needed here.
 
 Two details are worth knowing:
 
-* Queries set the **QU (unicast response) bit**, so responders reply straight to our ephemeral port.
-  The alternative, listening on multicast port 5353, means contending with the system responder that
-  already owns that port on macOS.
+* Queries set the **QU (unicast response) bit**, but the reply is listened for **both** on our
+  ephemeral port and on the multicast group. RFC 6762 section 5.4 lets a responder answer a QU
+  query by multicast anyway if it has not multicast that record recently, and Android's responder
+  does exactly that -- so a client that only watches its own port hears nothing on the very devices
+  this project targets. Joining 5353 needs `SO_REUSEADDR`/`SO_REUSEPORT` to coexist with the system
+  responder that already owns the port on macOS; if the join fails we fall back to unicast alone
+  rather than giving up.
+* Responders suppress duplicate answers for a second or two, so a query issued immediately after a
+  previous one can legitimately go unanswered. The listen window covers several announcements.
 * Every parsing function is total. Anything on the local network can send anything to this socket,
   so a malformed datagram yields no results rather than an exception in the middle of a command.
 """
 
 from __future__ import annotations
 
+import select
 import socket
 import struct
 import time
@@ -82,7 +89,7 @@ def build_query(service_type: str = SERVICE_TYPE) -> bytes:
 def discover(
     timeout: float = 2.0,
     service_type: str = SERVICE_TYPE,
-    interface_address: str = "0.0.0.0",
+    interface_address: str | None = None,
 ) -> list[DiscoveredAgent]:
     """Browses the local network for agents, for up to ``timeout`` seconds.
 
@@ -93,32 +100,148 @@ def discover(
     query = build_query(service_type)
     found: dict[tuple[str, int], DiscoveredAgent] = {}
 
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 255)
-        try:
-            sock.bind((interface_address, 0))
-        except OSError:
-            pass
-        sock.settimeout(0.25)
+    # Both sockets have to be pinned to a real interface; see _open_group_listener.
+    address = interface_address or _primary_ipv4() or "0.0.0.0"
 
+    querier = _open_querier(address)
+    if querier is None:
+        return []
+
+    # Most responders answer the multicast group rather than our port, whatever the QU bit asked
+    # for, so this is the socket that usually carries the answer. It is optional: without it
+    # discovery still works against a responder that honours QU.
+    listener = _open_group_listener(address)
+    sockets = [s for s in (querier, listener) if s is not None]
+
+    try:
         try:
-            sock.sendto(query, (MULTICAST_ADDRESS, MULTICAST_PORT))
+            querier.sendto(query, (MULTICAST_ADDRESS, MULTICAST_PORT))
         except OSError:
             return []
 
         deadline = time.monotonic() + timeout
+        resent = False
         while time.monotonic() < deadline:
-            try:
-                data, sender = sock.recvfrom(9000)
-            except socket.timeout:
-                continue
-            except OSError:
-                break
-            for agent in parse_response(data, service_type, source_address=sender[0]):
-                found[(agent.host, agent.port)] = agent
+            remaining = deadline - time.monotonic()
+            # One repeat halfway through, in case the first query was dropped. Asking more often
+            # than this is pointless: responders suppress duplicate answers regardless.
+            if not resent and remaining < timeout / 2:
+                resent = True
+                try:
+                    querier.sendto(query, (MULTICAST_ADDRESS, MULTICAST_PORT))
+                except OSError:
+                    pass
+
+            ready, _, _ = select.select(sockets, [], [], min(0.25, max(remaining, 0.0)))
+            for sock in ready:
+                try:
+                    data, sender = sock.recvfrom(9000)
+                except OSError:
+                    continue
+                for agent in parse_response(data, service_type, source_address=sender[0]):
+                    found[(agent.host, agent.port)] = agent
+    finally:
+        for sock in sockets:
+            sock.close()
 
     return sorted(found.values(), key=lambda agent: (agent.instance, agent.host))
+
+
+def _primary_ipv4() -> str | None:
+    """The address of the interface this machine would actually use to reach the LAN.
+
+    Connecting a UDP socket sends nothing; it only asks the routing table which local address
+    would be used. That is more dependable than `gethostbyname(gethostname())`, which on macOS
+    frequently answers 127.0.0.1 or an address belonging to a VPN.
+    """
+    probe = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        probe.connect((MULTICAST_ADDRESS, MULTICAST_PORT))
+        return probe.getsockname()[0]
+    except OSError:
+        return None
+    finally:
+        probe.close()
+
+
+def _open_querier(interface_address: str) -> socket.socket | None:
+    """The socket the query goes out of, listening on its own ephemeral port for a QU reply."""
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setsockopt(socket.IPPROTO_IP, socket.IP_MULTICAST_TTL, 255)
+        if interface_address not in ("", "0.0.0.0"):
+            # Pin the outgoing interface for the same reason the join below is pinned.
+            try:
+                sock.setsockopt(
+                    socket.IPPROTO_IP,
+                    socket.IP_MULTICAST_IF,
+                    socket.inet_aton(interface_address),
+                )
+            except OSError:
+                pass
+        try:
+            sock.bind((interface_address, 0))
+        except OSError:
+            pass
+        sock.setblocking(False)
+        return sock
+    except OSError:
+        sock.close()
+        return None
+
+
+def _open_group_listener(interface_address: str | None) -> socket.socket | None:
+    """A socket joined to the mDNS group, or None where the platform will not share port 5353.
+
+    Two details decide whether this receives anything at all.
+
+    Sharing the port: on macOS `mDNSResponder` already holds 5353, and on Linux a responder such
+    as Avahi usually does. `SO_REUSEADDR` and `SO_REUSEPORT` together are what let this socket
+    receive alongside them, and `SO_REUSEPORT` does not exist on every platform.
+
+    Joining on a **named interface**: `INADDR_ANY` leaves the choice to the routing table, which on
+    macOS picks an interface that is frequently not the one carrying mDNS — a VPN tunnel, or simply
+    the wrong one of several. Measured on a Mac with one Wi-Fi interface, an `INADDR_ANY` join
+    received nothing at all over twelve seconds while a join pinned to that same interface received
+    the network's ordinary mDNS traffic. The pinned join is therefore tried first, with
+    `INADDR_ANY` kept only as a fallback.
+    """
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        if hasattr(socket, "SO_REUSEPORT"):
+            try:
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEPORT, 1)
+            except OSError:
+                pass
+        sock.bind(("", MULTICAST_PORT))
+    except OSError:
+        sock.close()
+        return None
+
+    joined = False
+    for address in (interface_address, None):
+        if address in ("", "0.0.0.0"):
+            continue
+        membership = (
+            struct.pack("=4sl", socket.inet_aton(MULTICAST_ADDRESS), socket.INADDR_ANY)
+            if address is None
+            else struct.pack("=4s4s", socket.inet_aton(MULTICAST_ADDRESS), socket.inet_aton(address))
+        )
+        try:
+            sock.setsockopt(socket.IPPROTO_IP, socket.IP_ADD_MEMBERSHIP, membership)
+            joined = True
+            break
+        except OSError:
+            continue
+
+    if not joined:
+        sock.close()
+        return None
+
+    sock.setblocking(False)
+    return sock
 
 
 def parse_response(
