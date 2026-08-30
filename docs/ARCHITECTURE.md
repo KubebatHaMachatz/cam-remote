@@ -23,7 +23,7 @@ way, see [DESIGN.md](DESIGN.md).
                                         │  implemented by
                     ┌───────────────────▼──────────────────────┐
                     │  Adapters: CameraX · getprop · MediaStore│   :app
-                    │            Intent · NsdManager           │
+                    │            Intent                        │
                     └──────────────────────────────────────────┘
 ```
 
@@ -52,8 +52,8 @@ transport tests drive real commands rather than re-inventing doubles.
 | Package | Holds |
 |---|---|
 | `transport.http` | `commandApi` (the routes) and `HttpCommandServer` (the Ktor engine's lifetime). |
-| `adapter` | Every port's Android implementation, plus `NsdServiceAdvertiser` and `LocalAddresses`. |
-| `service` | `RemoteControlService` — foreground service, `LifecycleOwner`, owner of server and advertiser — and `BootReceiver`. |
+| `adapter` | Every port's Android implementation, plus `LocalAddresses`. |
+| `service` | `RemoteControlService` — foreground service, `LifecycleOwner`, owner of the HTTP server — and `BootReceiver`. |
 | `setup` | `LaunchActivity`, the app's only screen. Draws nothing of its own — see below. |
 | `config` | `ServerConfig`: port and whether the agent has ever been started, in private preferences. |
 | `di` | `AppContainer`: the whole composition, and the command catalog. |

@@ -130,11 +130,11 @@ camremote --host 10.0.0.4:8099 status
 camremote --host 10.0.0.4 status        # the port defaults to 8099
 ```
 
-There is no discovery step and nothing to pair. The agent still advertises itself over mDNS, so a
-Bonjour browser will see it, but the client no longer relies on that: it was unreliable on the
-handsets this was tested against, and reading four numbers off a notification is not the part of
-this problem worth automating. [docs/DEVICES.md](docs/DEVICES.md#why-the-client-does-not-discover-the-agent) has
-the details if you want them.
+There is no discovery step and nothing to pair. The agent opens a port, serves commands on it, and
+says in its notification where it is — that is the whole of it. It advertised itself over mDNS once;
+that was removed after proving unreliable on the handsets this was tested against, and reading four
+numbers off a notification is not the part of this problem worth automating.
+[docs/DEVICES.md](docs/DEVICES.md#why-the-client-does-not-discover-the-agent) has the measurements.
 
 `scripts/camremote` is a small wrapper that puts the package on the import path; `cd python &&
 python3 -m camremote …` is exactly equivalent, and `pip install ./python` gives you a `camremote`

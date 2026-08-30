@@ -133,12 +133,12 @@ most of them surprising:
 - Knox-managed devices may block the overlay permission by policy. On those, `camera.capture`,
   `device.getprop` and `system.status` still work, and `camera.open` reports `PRECONDITION_FAILED`
   accurately.
-- **This is the handset that cost the client its discovery feature.** The registration itself is
-  fine — `NsdServiceAdvertiser` logs `Advertising cam-remote samsung SM-S921B on _camremote._tcp
-  port 8099`, and One UI announces the record — but the device then answers no `_camremote._tcp`
-  query at all: 123 mDNS packets received in fifteen seconds, **none of them from the handset**.
-  Neither a QU nor a plain QM query changes it, and neither does the multicast lock the agent now
-  holds. See [below](#why-the-client-does-not-discover-the-agent) for the full account.
+- **This is the handset that cost the project its discovery feature**, since removed from both
+  sides. Registration was never the problem — the agent logged `Advertising cam-remote samsung
+  SM-S921B on _camremote._tcp port 8099` and One UI announced the record — but the device then
+  answered no `_camremote._tcp` query at all: 123 mDNS packets received in fifteen seconds, **none
+  of them from the handset**. Neither a QU nor a plain QM query changed it, and neither did a
+  multicast lock. See [below](#why-the-client-does-not-discover-the-agent) for the full account.
 
 - **Testing the on-demand prompt via repeated `adb shell pm revoke`/`am force-stop` cycles is
   misleading.** After several rapid denials in a row, Android silently auto-resolves the next
@@ -232,7 +232,7 @@ do.
   demonstrate that the capture path really is independent of the launch path — the claim the top of
   this document makes. On a fully set-up handset that distinction is invisible.
 - **Networking:** the emulator sits behind NAT on `10.0.2.x` and your host cannot reach it directly,
-  so mDNS discovery will not find it. Use a port forward and `--host`:
+  so it cannot be reached directly at all. Use a port forward and `--host`:
 
   ```bash
   adb forward tcp:8099 tcp:8099
@@ -307,11 +307,14 @@ suppressing the responder for a backgrounded app — of a piece with the "Sleepi
 above — but that was never proven.
 
 A client that usually cannot find the device is worse than one that always asks, especially when the
-agent already displays its own `ip:port` in a notification. So the agent still advertises itself —
-a Bonjour browser finds it, and a future client on a better-behaved platform could use that — and
-nothing in the shipped control application depends on it.
+agent already displays its own `ip:port` in a notification. The agent's advertisement was removed
+with the browser: a registration nothing consumes is not worth `NsdServiceAdvertiser`, a multicast
+lock and two Wi-Fi permissions. The agent opens a port and serves commands on it.
 
-### If you want to investigate it again
+### If you want to try it again
+
+Both halves are in the git history and neither was large — the advertiser was thirty lines against
+`NsdManager`. Should you revive them, these are the traps, in the order they were hit:
 
 ```bash
 curl -s http://<device-ip>:8099/v1/health   # separates "not found" from "not running"
@@ -320,9 +323,9 @@ dns-sd -B _camremote._tcp local             # an independent second opinion on m
 
 `dns-sd` answers from `mDNSResponder`'s cache, so a hit there does **not** prove the handset is
 replying now — the single most misleading signal in this whole investigation, and the one that cost
-an afternoon. To see what the device actually emits, restart the app and watch the announcement
-burst; if the record appears then but no query is answered a minute later, you are looking at the
-same behaviour described above.
+an afternoon. To see what a device actually emits, restart the app and watch the announcement burst;
+if the record appears then but no query is answered a minute later, that is the One UI behaviour
+described above and no amount of client-side work will fix it.
 
 ## Adding a device to the matrix
 

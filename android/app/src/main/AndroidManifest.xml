@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- The agent is reached over the local network; it never dials out. -->
+    <!-- The agent opens one port on the local network and serves commands on it. It never dials
+         out, and it no longer advertises itself: the operator reads the address off the agent's
+         own notification. See docs/DEVICES.md for why discovery was removed. -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />
 
     <uses-permission android:name="android.permission.CAMERA" />
 

@@ -418,8 +418,11 @@ notification, which is four numbers read off a screen the operator is holding an
 hundred lines went with the decision, including the whole mDNS implementation and the config file
 that existed to remember its results.
 
-The agent still advertises itself, so a Bonjour browser finds it and a future client on a better
-behaved platform could use that. Nothing in the shipped control application depends on it.
+The agent's own advertisement went with it. Keeping a service registration nothing consumed would
+have left `NsdServiceAdvertiser`, a multicast lock and two Wi-Fi permissions in the app to support a
+feature that had been deleted — the agent now opens a port, serves commands on it, and names itself
+in a notification. Anyone wanting the advertisement back has it in the history, and it was thirty
+lines against `NsdManager`.
 
 ---
 
