@@ -1,6 +1,5 @@
 package com.camremote.app.service
 
-import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -140,10 +139,13 @@ class RemoteControlService : LifecycleService() {
             )
             .build()
 
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            startForeground(NOTIFICATION_ID, notification, foregroundServiceTypes())
-        } else {
+        // A type may only be passed if the <service> element declares it, so "no type at all" is
+        // the honest answer below API 34 when the camera permission is still missing.
+        val types = foregroundServiceTypes()
+        if (types == 0) {
             startForeground(NOTIFICATION_ID, notification)
+        } else {
+            startForeground(NOTIFICATION_ID, notification, types)
         }
     }
 
@@ -156,10 +158,14 @@ class RemoteControlService : LifecycleService() {
      * `device.getprop` and `system.status`) on a device where the user has not finished setup.
      */
     private fun foregroundServiceTypes(): Int {
+        // specialUse only exists from API 34, and is the only non-camera type this service
+        // declares. Below that, no type is claimed unless the camera permission makes 'camera'
+        // truthful: passing a type the manifest does not declare -- as an earlier version did with
+        // dataSync -- throws IllegalArgumentException and takes the agent down at startup.
         var types = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE
         } else {
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            0
         }
         if (container.permissions.status().camera) {
             types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA
@@ -177,13 +183,8 @@ class RemoteControlService : LifecycleService() {
     private fun acquireWifiLock() {
         if (wifiLock != null) return
         val wifi = applicationContext.getSystemService<WifiManager>() ?: return
-        val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            WifiManager.WIFI_MODE_FULL_LOW_LATENCY
-        } else {
-            @Suppress("DEPRECATION")
-            WifiManager.WIFI_MODE_FULL_HIGH_PERF
-        }
-        wifiLock = wifi.createWifiLock(mode, WIFI_LOCK_TAG).apply { acquire() }
+        wifiLock = wifi.createWifiLock(WifiManager.WIFI_MODE_FULL_LOW_LATENCY, WIFI_LOCK_TAG)
+            .apply { acquire() }
     }
 
     /** Drops the Wi-Fi lock, if one is held. */
@@ -194,7 +195,6 @@ class RemoteControlService : LifecycleService() {
 
     /** Registers the low-importance channel the ongoing notification belongs to. */
     private fun createNotificationChannel() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
         val channel = NotificationChannel(
             CHANNEL_ID,
             getString(R.string.notification_channel_name),
