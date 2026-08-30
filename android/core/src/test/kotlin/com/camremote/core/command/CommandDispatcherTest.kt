@@ -2,8 +2,10 @@ package com.camremote.core.command
 
 import com.camremote.core.command.CommandOutcome.Failure
 import com.camremote.core.command.CommandOutcome.Success
+import com.camremote.core.port.CommandLog
 import com.camremote.core.protocol.CommandError
 import com.camremote.core.protocol.CommandRequest
+import com.camremote.core.protocol.CommandResponse
 import com.camremote.core.protocol.CommandStatus
 import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.InvalidParamsException
@@ -35,6 +37,79 @@ class CommandDispatcherTest {
 
     private fun dispatcher(vararg commands: Command) =
         CommandDispatcher(CommandRegistry(commands.toList()), clock)
+
+    /** Records what it was told, so a test can assert the agent narrated the right thing. */
+    private class RecordingLog : CommandLog {
+        val received = mutableListOf<String>()
+        val completed = mutableListOf<CommandResponse>()
+        override fun received(request: CommandRequest) { received += request.command }
+        override fun completed(request: CommandRequest, response: CommandResponse) {
+            completed += response
+        }
+    }
+
+    private fun loggingDispatcher(log: CommandLog, vararg commands: Command) =
+        CommandDispatcher(CommandRegistry(commands.toList()), clock, log = log)
+
+    @Test
+    fun `records every command it is given, before running it`() = runTest {
+        val log = RecordingLog()
+        val dispatcher = loggingDispatcher(log, TestCommand(name = "system.ping") { Success(null) })
+
+        dispatcher.dispatch(CommandRequest(id = "r1", command = "system.ping"))
+
+        assertEquals(listOf("system.ping"), log.received)
+    }
+
+    @Test
+    fun `records the outcome of a command that succeeded`() = runTest {
+        val log = RecordingLog()
+        val dispatcher = loggingDispatcher(
+            log,
+            TestCommand(name = "system.ping") {
+                Success(buildJsonObject { put("pong", JsonPrimitive(true)) })
+            },
+        )
+
+        dispatcher.dispatch(CommandRequest(id = "r1", command = "system.ping"))
+
+        val recorded = log.completed.single()
+        assertEquals(CommandStatus.OK, recorded.status)
+        assertEquals(JsonPrimitive(true), recorded.data?.get("pong"))
+    }
+
+    @Test
+    fun `records the outcome of a command that failed`() = runTest {
+        val log = RecordingLog()
+        val dispatcher = loggingDispatcher(
+            log,
+            TestCommand(name = "camera.capture") {
+                Failure(
+                    CommandError(
+                        code = ErrorCode.PERMISSION_DENIED,
+                        message = "no camera permission",
+                        remediation = "grant it",
+                    ),
+                )
+            },
+        )
+
+        dispatcher.dispatch(CommandRequest(id = "r1", command = "camera.capture"))
+
+        val recorded = log.completed.single()
+        assertEquals(CommandStatus.ERROR, recorded.status)
+        assertEquals(ErrorCode.PERMISSION_DENIED, recorded.error?.code)
+    }
+
+    @Test
+    fun `records an unknown command, which never reaches a command at all`() = runTest {
+        val log = RecordingLog()
+
+        loggingDispatcher(log).dispatch(CommandRequest(id = "r1", command = "camera.teleport"))
+
+        assertEquals(listOf("camera.teleport"), log.received)
+        assertEquals(ErrorCode.UNKNOWN_COMMAND, log.completed.single().error?.code)
+    }
 
     @Test
     fun `returns the command payload and echoes the correlation id`() = runTest {
