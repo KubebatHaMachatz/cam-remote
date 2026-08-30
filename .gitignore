@@ -1,23 +1,73 @@
-# Gradle / Android
+# ---- Android / Gradle / Kotlin ----
 android/.gradle/
 android/build/
 android/*/build/
 android/local.properties
 android/.kotlin/
+android/captures/
+android/.cxx/
+android/*.hprof
 *.apk
 *.aab
+*.ap_
+*.dex
+*.class
 *.iml
 .idea/
+.gradle/
+build/
+captures/
+output.json
+release/
 
-# Python
+# Android Studio / IntelliJ
+*.iws
+*.ipr
+local.properties
+.navigation/
+.externalNativeBuild/
+.cxx/
+
+# Native libs
+*.so
+
+# Signing
+*.jks
+*.keystore
+
+# ---- Python ----
 __pycache__/
 *.py[cod]
-.pytest_cache/
+*$py.class
 *.egg-info/
+*.egg
+.eggs/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+wheels/
+*.whl
 .venv/
 venv/
+env/
+ENV/
+pip-wheel-metadata/
 
-# Local artefacts
+# ---- Editors / OS ----
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ---- Local artefacts ----
 shots/
 shots-*/
-.DS_Store
+matrix/
