@@ -29,6 +29,10 @@ command needs one. Only the camera dialog is unavoidable for taking photographs.
 
 The agent starts serving as soon as the app is opened, and restarts on boot.
 
+**To stop it**, use the **Terminate service** button on that same notification. That is the only way
+— there is no screen to switch it off from. Stopping is remembered, so it stays stopped through a
+reboot; opening the app again starts it.
+
 ## 2. Point the client at it
 
 Pull down the notification shade on the phone:
@@ -45,8 +49,12 @@ That address is what every command needs. Pass it as `--host`, exactly as writte
 ```
 
 The port may be left off — it defaults to 8099. Nothing is saved between commands, so `--host` goes
-on every one. Check the notification again if a command reports "connection refused": DHCP moves
-phones around, and the notification always shows the current address.
+on every one.
+
+Check the notification again if a command reports "connection refused". DHCP moves phones around
+more than you would expect, and the agent watches for its own address changing and rewrites the
+notification when it does — so what the phone shows is always current, even if what you typed
+five minutes ago is not.
 
 Python 3.11 or newer, and nothing to install. The phone and the control machine must be on the same
 Wi-Fi network.

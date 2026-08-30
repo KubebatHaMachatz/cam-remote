@@ -5,7 +5,7 @@ the rear camera, and read device properties — together with a Python control a
 those commands from another machine.
 
 Written for the pre-interview assignment in [`pre_interview_assignment.md`](pre_interview_assignment.md).
-**Just want to run it?** [docs/quick-start.md](docs/quick-start.md) is a page and a half.
+**Just want to run it?** [docs/QUICK-START.md](docs/QUICK-START.md) is a page and a half.
 
 ```
 $ camremote --host 10.0.0.4 getprop ro.product.model ro.build.version.release
@@ -46,6 +46,9 @@ there is nothing to configure before it starts serving commands. Three things fo
   agent and one client share the network, which is the assignment's own stated scope — see
   [docs/DESIGN.md](docs/DESIGN.md#7-security) for what that trades away and what a real deployment
   would need instead.
+- **It stops from its own notification.** With no screen there is nowhere else to switch it off, so
+  the ongoing notification carries a **Terminate service** action. Stopping is remembered across a
+  reboot; opening the app starts it again.
 - **Permissions are granted on demand.** The one screen the app does have draws nothing of its own —
   it exists only to host the native Android dialogs Android itself requires, and it appears exactly
   when a command needs something the device has not granted yet. See
@@ -200,7 +203,7 @@ See [docs/DESIGN.md](docs/DESIGN.md#10-testing) for why the split falls exactly 
 
 | Symptom | Cause and fix |
 |---|---|
-| Nothing answers on `--host` | Check the address against the agent's notification: DHCP may have moved the phone. Confirm with `curl http://<ip>:8099/v1/health`. |
+| Nothing answers on `--host` | Check the address against the agent's notification, which rewrites itself when the device's address changes. Confirm with `curl http://<ip>:8099/v1/health`. |
 | `PRECONDITION_FAILED` from `open-camera` | "Display over other apps" is not granted. Tap the app's icon (or its notification) to be walked through what is still missing. |
 | `DEVICE_ERROR: No installed app handles any known camera intent (tried ...)` | The device has no camera app — common on bare AOSP images. `take-picture` still works; it drives the sensor directly. See [docs/DEVICES.md](docs/DEVICES.md). |
 | `PERMISSION_DENIED` from `take-picture` | The camera permission is missing. `camremote status` lists exactly what is missing, and the command itself tries to prompt the device for it. |
@@ -223,7 +226,7 @@ new transport rather than a new feature, and
 
 | Document | What it covers |
 |---|---|
-| [docs/quick-start.md](docs/quick-start.md) | Install, grant, run — the shortest path to a photograph |
+| [docs/QUICK-START.md](docs/QUICK-START.md) | Install, grant, run — the shortest path to a photograph |
 | [docs/DESIGN.md](docs/DESIGN.md) | Every significant decision and why it was made, including the ones rejected |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The layout of the code and the path a request takes through it |
 | [docs/EXTENDING.md](docs/EXTENDING.md) | Adding a command, adding a transport, swapping an implementation |
