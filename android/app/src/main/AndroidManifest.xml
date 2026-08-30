@@ -5,6 +5,9 @@
          out, and it no longer advertises itself: the operator reads the address off the agent's
          own notification. See docs/DEVICES.md for why discovery was removed. -->
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- To notice the device's own address changing, so the notification (the only place an
+         operator can read it) does not go stale when DHCP moves the handset. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
 
     <uses-permission android:name="android.permission.CAMERA" />
 
