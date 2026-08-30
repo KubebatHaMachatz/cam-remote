@@ -33,7 +33,6 @@ SERVICE_TYPE = "_camremote._tcp.local"
 TYPE_A = 1
 TYPE_PTR = 12
 TYPE_TXT = 16
-TYPE_AAAA = 28
 TYPE_SRV = 33
 
 CLASS_IN = 1
@@ -51,11 +50,6 @@ class DiscoveredAgent:
     host: str
     port: int
     attributes: Mapping[str, str] = field(default_factory=dict)
-
-    @property
-    def base_url(self) -> str:
-        """The address a client should connect to."""
-        return f"http://{self.host}:{self.port}"
 
     def describe(self) -> str:
         """One line naming this agent, preferring the model over the raw service instance."""

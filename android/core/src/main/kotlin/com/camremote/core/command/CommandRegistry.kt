@@ -29,7 +29,6 @@ class CommandRegistry(commands: List<Command>) {
     val names: List<String> = byName.keys.sorted()
 
     /** The catalog returned by `system.commands`, sorted so client output is stable. */
-    /** Every command's self-description, for `system.commands`. */
     fun descriptors(): List<CommandDescriptor> = byName.values
         .map { it.descriptor }
         .sortedBy { it.name }

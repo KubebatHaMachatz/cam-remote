@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import argparse
 
 from camremote.commands.base import CliCommand, Context
 

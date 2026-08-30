@@ -57,7 +57,6 @@ class StatusCommand(
         )
     }
 
-    /** Named rather than merely flagged, so the client can print the exact remedy. */
     /** Names the absent grants, so the client can print the exact remedy rather than a flag. */
     private fun missingGrants(status: PermissionStatus): List<String> = buildList {
         if (!status.camera) add("camera")

@@ -21,7 +21,6 @@ import com.camremote.core.protocol.CommandStatus
 import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.Params
 import com.camremote.core.protocol.ProtocolJson
-import java.io.File
 import java.net.ServerSocket
 import java.net.Socket
 import kotlinx.coroutines.runBlocking

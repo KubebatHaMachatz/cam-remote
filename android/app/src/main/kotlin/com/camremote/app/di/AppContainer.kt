@@ -130,12 +130,11 @@ class AppContainer private constructor(private val context: Context) {
         @Volatile
         private var instance: AppContainer? = null
 
-        /** The process-wide container. Safe to call from any component or thread. */
         /**
-         * The one container for this process.
+         * The one container for this process. Safe to call from any component or thread.
          *
-         * Double-checked because the service and the setup screen can reach for it from
-         * different threads at once.
+         * Double-checked because the service, the boot receiver and LaunchActivity can each
+         * reach for it from different threads at once.
          */
         fun from(context: Context): AppContainer =
             instance ?: synchronized(this) {

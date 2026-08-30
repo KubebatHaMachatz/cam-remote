@@ -12,18 +12,16 @@ android {
 
     defaultConfig {
         applicationId = "com.camremote.app"
-        // API 26 covers effectively every device still in service and is the floor for the
-        // foreground-service and scoped-storage behaviour this agent relies on.
+        // 29 is the floor for scoped storage, which is what lets camera.capture write into the
+        // user's Documents holding no storage permission at all. On 26-28 the same write needs
+        // WRITE_EXTERNAL_STORAGE, and carrying that path for a shrinking tail of devices would
+        // undermine the one claim this design makes. See docs/DESIGN.md section 8.
         minSdk = 29
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-    }
-
-    buildFeatures {
-        buildConfig = true
     }
 
     buildTypes {
@@ -51,7 +49,6 @@ android {
         resources {
             excludes += setOf(
                 "META-INF/INDEX.LIST",
-                "META-INF/io.netty.versions.properties",
                 "META-INF/{AL2.0,LGPL2.1}",
             )
         }
@@ -78,13 +75,10 @@ dependencies {
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlin.test.junit)
-    testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.ktor.server.test.host)
     testImplementation(testFixtures(project(":core")))
 
     androidTestImplementation(libs.androidx.test.junit)
     androidTestImplementation(libs.androidx.test.core)
     androidTestImplementation(libs.androidx.test.runner)
-    androidTestImplementation(libs.androidx.test.rules)
-    androidTestImplementation(libs.kotlinx.coroutines.test)
 }

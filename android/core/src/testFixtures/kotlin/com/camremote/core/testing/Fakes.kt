@@ -13,7 +13,6 @@ import kotlin.time.Duration.Companion.seconds
 class FakeClock(private var now: Long = 0) : Clock {
     override fun nowMillis(): Long = now
     fun advance(millis: Long) { now += millis }
-    fun set(millis: Long) { now = millis }
 }
 
 /**

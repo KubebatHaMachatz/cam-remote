@@ -23,8 +23,6 @@ import kotlinx.serialization.json.intOrNull
 @Serializable(with = ParamsSerializer::class)
 class Params(val raw: JsonObject) {
 
-    val keys: Set<String> get() = raw.keys
-
     /**
      * Returns the value of [key] as a string, or null when absent.
      *
