@@ -477,7 +477,41 @@ file:
 
 ---
 
-## 10. Verifying failure paths deliberately
+## 10. Watching what the device did
+
+Everything so far reads the agent's answer. This reads the agent's own account, which is the other
+half — and the half that is still there tomorrow.
+
+```bash
+adb logcat -s CamRemote
+```
+
+Leave it running and issue a command from the other machine. Each one appears twice, on arrival and
+on completion:
+
+```
+I CamRemote: --> camera.capture  id=0ebf744b  params={"filename":"logged"}
+I CamRemote: <-- camera.capture  OK  in 2356ms  {"id":"8exHY7TL…","path":"Documents/cam-remote/logged.jpg","sizeBytes":3285774,…}
+I CamRemote: --> camera.open  id=247cba03
+W CamRemote: <-- camera.open  PRECONDITION_FAILED  in 15ms  Android will not let a background app start an activity without the overlay permission
+W CamRemote:     remediation: A settings prompt was shown on the device; grant "Display over other apps" there, then retry
+```
+
+**What to look for:** a capture's line names the file it wrote, which is the quickest way to confirm
+where a photograph actually landed without going through MediaStore. A command that fails is logged
+at `WARN` with the same remediation the client prints, so a filtered log still tells the whole
+story. `ERROR` means a defect in the agent rather than a device saying no, and should never appear.
+
+**Why it is worth using:** it distinguishes "the command never arrived" from "the command arrived
+and failed", which from the control machine look identical — both are simply an error on the
+terminal. If nothing appears here at all, the problem is the network or the address, not the agent.
+
+This is the only place `adb` appears in normal use, and it is a diagnostic rather than part of the
+product: nothing about controlling the agent requires a cable.
+
+---
+
+## 11. Verifying failure paths deliberately
 
 A command that only ever succeeds hasn't been tested. These are worth running once to confirm the
 agent's error-reporting behaves as documented, not just its happy path.

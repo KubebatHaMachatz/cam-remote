@@ -41,7 +41,7 @@ authentication layer in this diagram because there is none in the app — see
 | `protocol` | The wire format: `CommandRequest`, `CommandResponse`, `CommandError`, `ErrorCode`, `Params`, `CommandDescriptor`, and `ProtocolJson` — the one place JSON is configured. |
 | `command` | `Command`, `CommandRegistry`, `CommandDispatcher`, `ResourceLocks`, `DeviceResource`. |
 | `command.impl` | The seven capabilities: ping, status, commands, getprop, open camera, camera-apps, capture. |
-| `port` | What the core needs from the outside: `CameraController`, `PhotoStore`, `PropertyReader`, `ActivityStarter`, `PermissionInspector`, `PermissionPrompt`, `Clock`. |
+| `port` | What the core needs from the outside: `CameraController`, `PhotoStore`, `PropertyReader`, `ActivityStarter`, `PermissionInspector`, `PermissionPrompt`, `CommandLog`, `Clock`. |
 | `logic` | Pure decisions worth testing: `CameraAppLaunch`, `CameraAppChoice`, `PhotoPaths`, `PhotoNaming`, `PhotoIndex`, `PropertyKeys`, `GetPropOutput`, `FirstAvailablePropertyReader`, `LanAddresses`. |
 
 `src/testFixtures` holds the fakes — `FakeClock`, `TestCommand` — and is published to `:app` so the
@@ -105,8 +105,11 @@ Taking `camremote take-picture --out ./shots` end to end:
 3. **`HttpTransport`** POSTs it to `/v1/command`. No credential travels with it — there is none.
 4. **`commandApi`** parses the envelope and calls the dispatcher. It decides HTTP status codes and
    nothing else.
-5. **`CommandDispatcher`** looks the command up, takes the camera mutex, and runs it under a
-   45-second budget.
+5. **`CommandDispatcher`** records the request through `CommandLog`, looks the command up, takes
+   the camera mutex, and runs it under a 45-second budget. It records the outcome the same way,
+   whatever that outcome is — the device log is the only account of what happened on a handset
+   nobody is watching, and it hangs off the dispatcher rather than a transport so a second
+   transport would inherit it.
 6. **`CapturePhotoCommand`** checks the camera permission and that a rear sensor exists — calling
    `PermissionPrompt.requestAttention()` first if the permission is missing — asks `PhotoNaming` for
    a filename and `PhotoPaths` for a destination directory, both of which can still reject the
@@ -134,6 +137,7 @@ Useful when deciding where a change belongs:
 | What a command does | `core/command/impl/` |
 | How the device does it | `app/adapter/` |
 | Which HTTP status expresses a failure | `transport/http/CommandApi.kt` |
+| What the device log says happened | `app/adapter/LogcatCommandLog.kt` |
 | Which permission screen to show next | `app/setup/LaunchActivity.kt` |
 | Where a photo may be written | `core/logic/PhotoPaths.kt` |
 | What is wired to what | `app/di/AppContainer.kt` |

@@ -270,6 +270,17 @@ which one `camera.open` would pick, and the command catalog. A section that fail
 with the camera permission missing, say — is recorded as an error inside the report rather than
 ending it, because a diagnostic that only runs on healthy devices is not much use.
 
+Watch what the device itself thinks it is doing, which is the fastest way to tell "the command
+never arrived" from "the command arrived and failed":
+
+```bash
+adb logcat -s CamRemote
+```
+
+Every command is logged as it arrives and again with its outcome, duration and payload — including
+the path a capture was written to. A refusal is `WARN` and carries the same remediation the client
+prints; `ERROR` means a defect in the agent and should never appear.
+
 Then, if something specific needs pinning down:
 
 ```bash
