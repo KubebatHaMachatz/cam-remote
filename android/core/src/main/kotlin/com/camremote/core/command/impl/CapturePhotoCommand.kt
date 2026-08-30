@@ -4,6 +4,7 @@ import com.camremote.core.command.Command
 import com.camremote.core.command.CommandOutcome
 import com.camremote.core.command.DeviceResource
 import com.camremote.core.logic.PhotoNaming
+import com.camremote.core.logic.PhotoPaths
 import com.camremote.core.port.CameraController
 import com.camremote.core.port.CaptureRequest
 import com.camremote.core.port.Clock
@@ -23,10 +24,16 @@ import kotlinx.serialization.json.buildJsonObject
 /**
  * Takes a still with the rear camera — the assignment's second requirement.
  *
- * Two things are deliberate here. The capture is headless: no preview, no shutter button, no
- * `ACTION_IMAGE_CAPTURE` intent that would need a human to press something. And "rear camera only"
- * is enforced rather than assumed — a device without a rear sensor gets a clear failure instead of
- * a quietly substituted selfie.
+ * Three things are deliberate here. The capture is headless: no preview, no shutter button, no
+ * `ACTION_IMAGE_CAPTURE` intent that would need a human to press something. "Rear camera only" is
+ * enforced rather than assumed — a device without a rear sensor gets a clear failure instead of a
+ * quietly substituted selfie. And the photograph is saved somewhere the person holding the phone
+ * can actually find it, under `Documents`, rather than in app-private storage only the agent can
+ * see.
+ *
+ * The order of the steps matters. Everything that can be rejected — the permission, the sensor, the
+ * quality, the filename, the destination — is settled *before* the shutter fires, so a request that
+ * was never going to work does not leave a photograph behind to clean up.
  */
 class CapturePhotoCommand(
     private val camera: CameraController,
@@ -38,13 +45,14 @@ class CapturePhotoCommand(
 
     override val descriptor = CommandDescriptor(
         name = "camera.capture",
-        description = "Take a still photograph with the rear camera and save it on the device.",
+        description = "Take a still photograph with the rear camera and save it under Documents.",
         parameters = listOf(
             ParameterDescriptor(
                 name = "path",
                 type = ParameterType.STRING,
                 required = false,
-                description = "Destination directory. Must be inside the agent's writable roots.",
+                description = "Destination directory, relative to the device's Documents folder.",
+                default = "${PhotoPaths.PRIMARY_DIRECTORY}/${PhotoPaths.DEFAULT_SUBDIRECTORY}",
             ),
             ParameterDescriptor(
                 name = "filename",
@@ -59,13 +67,6 @@ class CapturePhotoCommand(
                 description = "JPEG quality, 1-100.",
                 default = "95",
             ),
-            ParameterDescriptor(
-                name = "publishToGallery",
-                type = ParameterType.BOOLEAN,
-                required = false,
-                description = "Also index the photo in MediaStore so it appears in the gallery.",
-                default = "false",
-            ),
         ),
     )
 
@@ -75,7 +76,7 @@ class CapturePhotoCommand(
     // on a cold sensor, and a spurious timeout here would leave a file half-written.
     override val timeout = 45.seconds
 
-    /** Checks the preconditions, takes the photograph, and records where it landed. */
+    /** Checks the preconditions, takes the photograph, and publishes it where the user can find it. */
     override suspend fun execute(params: Params): CommandOutcome {
         if (!permissions.status().camera) {
             // No setup screen exists, so the only known moment a human might be looking at the
@@ -101,12 +102,18 @@ class CapturePhotoCommand(
             throw InvalidParamsException("Parameter 'jpegQuality' must be between 1 and 100, got $quality")
         }
 
+        // Both throw InvalidParamsException, and both do so before the sensor is touched.
         val filename = PhotoNaming.filenameFor(clock, params.optString("filename"))
-        val destination = photos.destinationFor(params.optString("path"), filename)
+        val directory = PhotoPaths.resolveRelativeDirectory(params.optString("path"))
+
+        // Written privately first: a failed capture must not leave a torn JPEG sitting in the
+        // user's Documents, and there is no destination CameraX can be handed that rolls back.
+        val scratch = photos.scratchPathFor(filename)
 
         val result = try {
-            camera.captureRearStill(CaptureRequest(destinationPath = destination, jpegQuality = quality))
+            camera.captureRearStill(CaptureRequest(destinationPath = scratch, jpegQuality = quality))
         } catch (e: Exception) {
+            photos.discard(scratch)
             return CommandOutcome.failure(
                 code = ErrorCode.DEVICE_ERROR,
                 message = "Capture failed: ${e.message}",
@@ -114,21 +121,31 @@ class CapturePhotoCommand(
             )
         }
 
-        val stored = photos.record(destination, clock.nowMillis())
-        val galleryUri = if (params.optBoolean("publishToGallery", false)) photos.publish(stored) else null
+        val stored = try {
+            photos.publish(scratch, directory, filename, clock.nowMillis())
+        } catch (e: Exception) {
+            photos.discard(scratch)
+            return CommandOutcome.failure(
+                code = ErrorCode.DEVICE_ERROR,
+                message = "The photograph was taken but could not be saved to $directory: ${e.message}",
+                remediation = "Check the device has free storage, then retry",
+            )
+        }
 
         return CommandOutcome.Success(
             buildJsonObject {
                 put("id", JsonPrimitive(stored.id))
-                put("path", JsonPrimitive(stored.path))
+                // Where a person would look for it on the device, not a filesystem path: shared
+                // storage is addressed through MediaStore and has no path worth quoting.
+                put("path", JsonPrimitive(stored.displayPath))
+                put("uri", JsonPrimitive(stored.uri))
                 put("sizeBytes", JsonPrimitive(stored.sizeBytes))
                 put("widthPx", JsonPrimitive(result.widthPx))
                 put("heightPx", JsonPrimitive(result.heightPx))
                 put("capturedAtMillis", JsonPrimitive(stored.capturedAtMillis))
-                // The control machine cannot read the handset's filesystem, so it is told how to
+                // The control machine cannot read the handset's storage, so it is told how to
                 // fetch what was just taken.
                 put("downloadPath", JsonPrimitive("/v1/media/${stored.id}"))
-                galleryUri?.let { put("galleryUri", JsonPrimitive(it)) }
             },
         )
     }
