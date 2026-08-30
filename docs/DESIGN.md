@@ -2,8 +2,8 @@
 
 The assignment asks for three small capabilities and says twice what it is actually looking for:
 modular design, coding standards, and the ability to add new functionality with minimal change to
-what already exists. This document records the decisions that follow from that, including the ones
-that were rejected and why.
+what already exists. It also says explicitly that no GUI is required. This document records the
+decisions that follow from that, including the ones that were rejected and why.
 
 ---
 
@@ -11,7 +11,7 @@ that were rejected and why.
 
 **Decision: a request/response agent, architected as ports and adapters.**
 
-The assignment asks for an app with no GUI. That single sentence rules out most of what Android
+The assignment says no GUI is required. That single sentence rules out most of what Android
 architecture guidance assumes. MVVM, MVC and MVI are *presentation* patterns: their job is mediating
 between a view and mutable view state. With no view there is no view state, and adopting them here
 would produce ViewModels that nothing observes — architecture as costume.
@@ -23,7 +23,7 @@ fits that shape:
 - **`:core`** holds the application logic — the protocol, the commands, the decision-making — and
   depends on nothing from Android.
 - **Ports** are the interfaces the core needs: `CameraController`, `PropertyReader`, `PhotoStore`,
-  `ActivityStarter`, `PermissionInspector`, `Clock`.
+  `ActivityStarter`, `PermissionInspector`, `PermissionPrompt`, `Clock`.
 - **Adapters** in `:app` implement those with CameraX, `ProcessBuilder`, the filesystem, `Intent`,
   and so on.
 - The **driving port** is `CommandDispatcher`, the single entrance every transport goes through.
@@ -35,8 +35,8 @@ compile rather than quietly eroding the boundary.
 **What replaces the ViewModel.** Strip MVVM down and a ViewModel provides two things — surviving
 configuration changes, and owning a coroutine scope. Here `RemoteControlService` does both, and being
 a `LifecycleService` it also supplies the `LifecycleOwner` that CameraX requires. `AppContainer` owns
-the singletons. The one screen that does exist, `SetupActivity`, is simple enough to read its state
-directly; a ViewModel there would be ceremony.
+the singletons. The one activity the app has, `LaunchActivity`, draws nothing of its own — it exists
+solely to host native Android dialogs — so it has no state worth a ViewModel either.
 
 **Rejected: full Clean Architecture.** Use cases, repositories, mappers, and domain/data/presentation
 layering would be a great deal of structure for six commands, and a reviewer would be right to read
@@ -69,11 +69,10 @@ TCP, controlling the phone from outside the LAN needs no code at all — an over
 Tailscale gives the handset a stable address reachable from anywhere.
 
 **The consequence: adb had to go entirely.** Once the transport is the network, `adb` is only a
-convenience, and keeping it would have hidden real problems. Removing it forced three things that
-improved the result: a proper setup screen instead of `pm grant`; mDNS discovery instead of asking
-the operator for an IP address; and a pairing handshake instead of reading a token out of a shell.
-It also turned out to be *necessary* — the ColorOS handset this was developed against refuses
-`pm grant` and `appops set` from adb outright, so the shortcut would not have worked anyway.
+convenience, and keeping it would have hidden real problems. Removing it forced mDNS discovery
+instead of asking the operator for an IP address, and it turned out to be *necessary* as well as
+principled — the ColorOS handset this was developed against refuses `pm grant` and `appops set` from
+adb outright, so the shortcut would not have worked anyway.
 
 ---
 
@@ -90,22 +89,27 @@ fix attached, rather than firing an intent the system silently discards. Verifie
 the agent opens ColorOS's camera app from a background service.
 
 **A camera-typed foreground service cannot be started from the background** (Android 14+). The same
-overlay grant is one of the listed exemptions, so one setup step unlocks both problems. There is a
-second subtlety: from API 34 you may not even *declare* the camera service type without holding the
-camera permission — asking for it regardless throws and takes the agent down. So
-`RemoteControlService` computes its service types from the permissions actually held, and starts
-without the camera type on a half-configured device, still serving `device.getprop` and
-`system.status` so the operator can see what is missing.
+overlay grant is one of the listed exemptions, so one grant unlocks both problems. There is a second
+subtlety: from API 34 you may not even *declare* the camera service type without holding the camera
+permission — asking for it regardless throws and takes the agent down. So `RemoteControlService`
+computes its service types from the permissions actually held, and starts without the camera type on
+a half-configured device, still serving `device.getprop` and `system.status` so the operator can see
+what is missing.
 
 **Runtime permissions need an activity.** There is no remote route to them, and on this handset no
-adb route either. Hence `SetupActivity` — the app's only screen, and not the GUI the assignment
-forbids, which means a *control* GUI. It grants permissions, switches the agent on, shows the
-address, and opens the pairing window. Nothing on it takes a photograph.
+adb route either. Hence `LaunchActivity` — the app's only screen, and specifically not the GUI the
+assignment says is unnecessary, which means a *control* GUI. It draws nothing of its own: it is a
+fully transparent trampoline whose entire job is requesting whatever the device is still missing, and
+it runs either because the user tapped the app icon (unavoidable — Android has no other way to start
+an app for the first time) or because a command that needed a permission called
+[`PermissionPrompt.requestAttention`](#4-the-command-layer) as part of failing. Section 7 covers this
+in full.
 
 A fourth constraint appeared once Wi-Fi became the only transport: **Doze and Wi-Fi power saving**
-drop inbound connections with the screen off. The service holds a `WifiLock` and setup requests a
-battery-optimisation exemption. Aggressive OEM process killers are beyond what code can fix, and the
-README says so rather than pretending otherwise.
+drop inbound connections with the screen off. The service holds a `WifiLock`, and
+`LaunchActivity` requests a battery-optimisation exemption alongside the others. Aggressive OEM
+process killers are beyond what code can fix, and the README says so rather than pretending
+otherwise.
 
 ---
 
@@ -137,6 +141,10 @@ written once and every command reports a bad parameter identically.
 
 **`system.commands` makes the agent self-describing.** The catalog, including each parameter, is
 served from the device, so a control application can list capabilities it was never compiled against.
+
+**A command that hits a missing permission asks for it, right then.** `CapturePhotoCommand` and
+`OpenCameraCommand` both take a `PermissionPrompt` and call `requestAttention()` as part of returning
+their failure — see section 7 for why this exists and how it is triggered.
 
 ---
 
@@ -185,33 +193,29 @@ with the control application, so a newer client adding a field must not break an
 
 ## 7. Security
 
-The agent listens on the local network, so the threat model is "somebody else on this Wi-Fi".
+### There is no authentication
 
-- **A bearer token on every request**, generated on first run — not baked into the build, so two
-  installs of the same APK do not share a secret. The comparison is constant-time and length-safe.
-- **The token is four characters, deliberately.** This is a proof of concept, and a token that short
-  can be read off the phone's screen and typed in a second, which makes the manual fallback to
-  pairing genuinely usable. The cost is not hidden: four characters from a 32-symbol alphabet is
-  about a million possibilities, which anyone on the same network can exhaust in well under a minute.
-  It keeps a neighbour from stumbling onto the port; it does not keep out anyone who wants in. The
-  alphabet omits `O`/`0` and `I`/`1` so it survives being copied by eye. Restoring a serious secret is
-  one constant — `Tokens.LENGTH` — because nothing else in the project depends on the length.
-- **Pairing is a deliberate act.** With no adb there has to be some in-band way to hand over the
-  token, so the user taps **Pair**, which opens a sixty-second window that closes after one claim.
-  Someone on the same network can only pair if they are also holding the phone at that moment.
-- **The server only runs while the user has switched it on.** An app that starts listening on the
-  local network the moment it is installed would be a poor citizen whatever its purpose.
-- **The capture destination is confined to an allow-list**, canonicalised before checking — a textual
-  prefix comparison would be fooled by `..`, by a symlink, and by a sibling directory whose name
-  merely starts with the root's. All three are in the tests.
-- **Property names are validated** against `^[A-Za-z0-9][A-Za-z0-9._-]*$` even though `getprop` is
-  executed with the key as a discrete argument and no shell is involved. It costs one regex and
-  turns a class of question into a non-question.
-- **Photos require the token** like everything else. The download route is not a loophole.
+**Decision: `/v1/command` and every other route are open to anyone who can reach the port. No bearer
+token, no pairing code, no handshake of any kind.**
 
-What is deliberately *not* done: TLS. A self-signed certificate on a LAN service buys warnings rather
-than security, and doing it properly needs a trust story this assignment does not call for. The
-README states the exposure plainly instead.
+This is a deliberate trade, made explicitly rather than discovered by omission, on the assumption the
+project was given: exactly one agent and one client share the LAN. There is no third party to keep
+out and no second client to distinguish from the real one, so a credential would be protecting
+against a threat this deployment does not have.
+
+What that costs, plainly: anyone else who joins the same Wi-Fi and finds the port can invoke every
+command this agent exposes, including taking a photograph and reading device properties, with no
+challenge at all. That is a real exposure on a network shared with people you do not trust, and it is
+the reason `LaunchActivity` never runs the server on install — the agent only starts once someone has
+opened the app, which is the one point at which the assumption ("this network, this one client") gets
+implicitly re-confirmed by a human.
+
+An earlier version of this project *did* carry a token — four random characters, generated on first
+run, handed to the control machine through a tap-to-pair handshake with a sixty-second single-use
+window. It is preserved at the `v1` git tag for reference. Restoring something like it, if the
+single-agent-single-client assumption ever stops holding, is a bounded piece of work: reintroduce an
+`AccessControl` port checked in `CommandApi`'s routes, and a way to hand the credential to the client
+that does not require adb — the removed `PairingWindow` design is a reasonable starting point.
 
 ### Why the agent cannot grant itself camera access
 
@@ -239,17 +243,41 @@ behaviours:
   the grant throws and takes the whole agent down. Half-configured, the agent still runs and still
   serves `device.getprop` and `system.status`.
 
+**And now a fifth: asked for as part of the command that needed it.** With no setup screen to send
+the operator to, `CapturePhotoCommand`/`OpenCameraCommand` call `PermissionPrompt.requestAttention()`
+the moment they find a permission missing — before returning their (unchanged) failure. That tries to
+bring `LaunchActivity` to the foreground directly, which Android may or may not allow depending on OS
+version and how recently the app was used; the guaranteed fallback is the agent's own persistent
+notification, whose tap target is the same activity. Either way, the human standing at the phone —
+"a user attending to this on the Android side" — sees the actual system dialog moments after the
+command that needed it failed, taps Allow, and the *next* attempt succeeds. There is no separate
+setup ritual; the prompt is a direct consequence of the command that required it.
+
 Zero-touch *is* achievable, but only by holding privilege this app deliberately does not have:
 
 | Route | What it gives | What it costs |
 |---|---|---|
 | **Device Owner** | `DevicePolicyManager.setPermissionGrantState` silently grants `CAMERA` and `POST_NOTIFICATIONS` to itself. How MDM products and device farms do it. | Provisioning needs a device with **no accounts configured**, so in practice a factory-reset handset; and `SYSTEM_ALERT_WINDOW` is an *appop*, not a runtime permission, so it is not covered. Removing a device owner needs `dpm remove-active-admin` or a factory reset. |
-| **Platform-signed system app** | Everything pre-granted at first boot via a `default-permissions` XML, and privileged apps are not subject to the same background-launch rule — the setup screen disappears entirely. | Needs an AOSP tree or the platform signing key. |
+| **Platform-signed system app** | Everything pre-granted at first boot via a `default-permissions` XML, and privileged apps are not subject to the same background-launch rule — even `LaunchActivity` becomes unnecessary. | Needs an AOSP tree or the platform signing key. |
 | **`adb shell pm grant`** | One command per permission. | It is adb, which this project excludes by design — and it is **refused outright by ColorOS**, as the realme handset demonstrated. Not dependable across a fleet. |
 
-The middle row is the version that would fully satisfy the assignment's "no GUI", and it is worth
-saying plainly that it is unreachable from an APK someone sideloads. The setup screen is not a
-shortcut around the permission model; it is what the permission model requires.
+The middle row is the version that would drop the app's last screen entirely, and it is worth saying
+plainly that it is unreachable from an APK someone sideloads. `LaunchActivity` is not a shortcut
+around the permission model; it is what the permission model requires, reduced to the minimum Android
+allows.
+
+### The rest
+
+- **The capture destination is confined to an allow-list**, canonicalised before checking — a textual
+  prefix comparison would be fooled by `..`, by a symlink, and by a sibling directory whose name
+  merely starts with the root's. All three are in the tests.
+- **Property names are validated** against `^[A-Za-z0-9][A-Za-z0-9._-]*$` even though `getprop` is
+  executed with the key as a discrete argument and no shell is involved. It costs one regex and
+  turns a class of question into a non-question.
+
+What is deliberately *not* done: TLS. A self-signed certificate on a LAN service buys warnings rather
+than security, and doing it properly needs a trust story this assignment does not call for. The
+README states the exposure plainly instead.
 
 ---
 
@@ -276,11 +304,12 @@ saving a file that is worth reading: as it stands, the whole composition of the 
 page, and the command list is the complete answer to "what can this thing do?".
 
 One thing this got wrong first, and it is worth recording because it is the sort of bug the rest of
-the strategy cannot catch. The setup screen and the service each constructed their own container. It
-compiled, it unit-tested clean, and it failed on the handset: tapping **Pair** opened a pairing window
-on the activity's copy while the HTTP server consulted its own and refused every request. The fix was
-not to be careful — it was to make the constructor private and hand out a single instance, so the
-shape that caused it no longer exists.
+the strategy cannot catch. An earlier version of the app (when it still had a setup screen) let that
+screen and the service each construct their own container. It compiled, it unit-tested clean, and it
+failed on the handset: a pairing window opened on the screen's copy while the HTTP server consulted
+its own and never saw it. The fix was not to be careful — it was to make the constructor private and
+hand out a single instance, so the shape that caused it no longer exists, regardless of how many
+components go on to reach for the container.
 
 ---
 
@@ -292,12 +321,16 @@ capability is a `test:` commit followed by a `feat:` commit.
 TDD only works on code that runs in milliseconds without a device — which is exactly what the
 hexagon delivers. All the decision-making lives in `:core` with no Android imports: target
 resolution, precondition checks, path validation, key sanitising, error mapping, filename
-generation, mDNS parsing. Every port has a fake. That is 119 tests in `:core` that run in about a
-second, plus 26 in `:app` for the transport and the filesystem store, and 65 for the Python client.
+generation, mDNS parsing, address ranking. Every port has a fake. That is 131 tests in `:core` that
+run in about a second, plus 20 in `:app` for the transport and the filesystem store, and 69 for the
+Python client.
 
 The adapters left over are three-to-ten-line pass-throughs with no branching. `CameraAppLauncher` is
 the clearest case: a pure function produces a `LaunchSpec` — tested against the no-camera-app and
-missing-permission cases — and a trivial shell turns it into an `Intent`.
+missing-permission cases — and a trivial shell turns it into an `Intent`. `LaunchActivity` is the one
+genuinely untestable piece by this method: it is Android-framework glue by nature (requesting
+permissions, launching Settings intents, no decisions of its own to unit-test), verified instead on a
+real handset alongside the camera and mDNS pieces below.
 
 **Three things this structurally cannot cover**, named rather than papered over:
 
@@ -305,9 +338,9 @@ missing-permission cases — and a trivial shell turns it into an `Intent`.
 2. that the OS permits the background activity launch on a given Android version,
 3. that mDNS traverses a physical network.
 
-Those are the five instrumented tests and the manual run, and both were done on a real Realme
-RMX3563 on Android 14. The instrumented capture test asserts the JPEG magic bytes, because "a file
-exists" is not the same claim as "a photograph was taken".
+Those are the five instrumented tests and the manual run, and both were done on real handsets — a
+Realme RMX3563 and a Samsung Galaxy S24, both Android 14. The instrumented capture test asserts the
+JPEG magic bytes, because "a file exists" is not the same claim as "a photograph was taken".
 
 Two things learned from running them on a real OEM device are baked into the suite.
 `GrantPermissionRule` is not portable — ColorOS refuses runtime grants from UiAutomation as well as
@@ -336,6 +369,11 @@ read together.
 agent could not be reached. A script needs to tell "the phone said no" from "the phone was not
 there".
 
+**`pair` is a convenience, not a login.** It confirms the agent answers `/v1/health` and writes its
+address to `~/.camremote.toml`, purely so later commands skip the mDNS round trip. There is nothing
+to claim and nothing that expires — running it twice, or never, changes nothing about what commands
+you can send.
+
 The **mDNS browser** is the one substantial piece. Only the browsing half is implemented — enough to
 ask one question and read the answer. Queries set the unicast-response bit so replies arrive on an
 ephemeral port, avoiding a fight with the system responder that already owns port 5353 on macOS. Every
@@ -346,12 +384,17 @@ datagram yields no results rather than a stack trace mid-command.
 
 ## 12. Known limitations
 
+- **The API is unauthenticated.** See section 7 — a deliberate trade for the assignment's stated
+  single-agent-single-client scope, not an oversight.
 - **A busy camera costs a full timeout.** If another app holds the sensor, CameraX blocks rather than
   failing fast, so `take-picture` returns `TIMEOUT` after 45 seconds. Correct, but slow; there is no
   cheap "is the camera free?" check to pre-empt it with.
 - **The lens hint on `camera.open` is best-effort.** No platform contract obliges a camera app to
   honour it. The rear-camera *requirement* is met by `camera.capture`, which drives the sensor
   directly and depends on nobody's goodwill.
+- **`requestAttention()`'s direct activity launch is best-effort.** Whether it succeeds depends on
+  Android version and recent app usage; the persistent notification is the mechanism guaranteed to
+  work, at the cost of needing the operator to notice and tap it.
 - **OEM process killers** can stop the agent regardless of Android's own rules. Opening the app
   restarts it, and it restarts after a reboot, but a vendor protected-apps list may still be needed.
 - **No TLS**, as discussed above.

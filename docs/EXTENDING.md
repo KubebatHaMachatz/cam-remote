@@ -142,7 +142,6 @@ alternatives weighed in [DESIGN.md](DESIGN.md#2-how-the-device-is-controlled).
 ```kotlin
 class MqttCommandTransport(
     private val dispatcher: CommandDispatcher,
-    private val accessControl: AccessControl,
     private val deviceId: String,
 ) {
     /** Subscribe to camremote/<deviceId>/cmd; publish replies to camremote/<deviceId>/res. */
@@ -155,7 +154,7 @@ class MqttCommandTransport(
 ```
 
 Note what is *not* there: no command knowledge, no permission logic, no timeout policy. Those belong
-to the dispatcher and stay there. A transport authenticates, decodes, dispatches, and encodes.
+to the dispatcher and stay there. A transport decodes, dispatches, and encodes — nothing else.
 
 ### Where it plugs in
 
@@ -166,13 +165,16 @@ to the dispatcher and stay there. A transport authenticates, decodes, dispatches
 The `id` field in the envelope exists for exactly this: a message bus is not request/response, so
 replies have to be paired with requests by correlation id.
 
-### Two things a non-HTTP transport must solve
+### One thing a non-HTTP transport must solve
 
 - **Large payloads.** A full-resolution JPEG is several megabytes, which is fine over an HTTP `GET`
   and awkward over a message broker. Either chunk it, or keep `/v1/media/{id}` for the bytes and use
   the broker only for commands.
-- **Authentication.** `AccessControl` is transport-agnostic on purpose — pass the credential from
-  whatever the transport's equivalent of a header is.
+
+There is nothing to say about authentication here because the agent has none — see
+[DESIGN.md §7](DESIGN.md#7-security) for that trade. If a future version reintroduces a credential,
+the right seam is the same one: a transport-agnostic check the dispatcher's caller runs before
+`dispatch()`, so every transport enforces it identically rather than each rolling its own.
 
 ### On the client side
 

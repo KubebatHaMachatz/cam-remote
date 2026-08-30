@@ -1,9 +1,10 @@
 # Manual testing instructions
 
 A step-by-step walkthrough for running `camremote` by hand and verifying each command actually did
-what it claims. Assumes the agent is already installed and set up on the device (camera permission,
-notifications, "Display over other apps", battery exemption all granted, and the agent switched on)
-— see the [README](../README.md#set-up-the-device-once) if that part is not done yet.
+what it claims. Assumes the agent is already installed and the app has been opened on the device at
+least once (camera permission, notifications, "Display over other apps" and the battery exemption
+all granted) — see the [README](../README.md#set-up-the-device) if that part is not done yet. There
+is no separate "switch the agent on" step: opening the app starts it.
 
 Every command below is `python -m camremote <subcommand>` or the equivalent `./scripts/camremote
 <subcommand>` wrapper. Run from the repository root; the wrapper handles the import path for you.
@@ -20,7 +21,6 @@ Global flags, valid before the subcommand name, apply to every command below:
 |---|---|
 | `--host` | Agent address. Skips mDNS discovery when given. |
 | `--port` | Agent port. Default `8099`. |
-| `--token` | Bearer token. Normally supplied automatically by `pair`. |
 | `--timeout` | Seconds to wait for a reply. Default `60`. |
 | `--config` | Config file path. Default `~/.camremote.toml`. |
 | `--json` | Print the agent's raw JSON instead of the human-readable summary. |
@@ -30,7 +30,7 @@ Exit codes, useful when scripting a check:
 | Code | Meaning |
 |---|---|
 | `0` | Command succeeded |
-| `1` | The agent was reached and reported a failure (including a rejected token) |
+| `1` | The agent was reached and reported a failure |
 | `2` | The command line was wrong |
 | `3` | No agent could be reached |
 
@@ -42,8 +42,8 @@ Check the exit code of any command with `echo $?` immediately after running it.
 
 - Python 3.11+, nothing else installed (`python3 --version` to confirm).
 - The phone and this machine on the same Wi-Fi network.
-- The agent switched on and setup complete — confirm on the phone's cam-remote screen, or skip ahead
-  to [`status`](#status) once paired.
+- The app opened on the phone at least once, so the agent is running and its permissions are
+  granted — skip ahead to [`status`](#3-status--confirm-the-device-and-its-readiness) to check.
 
 ---
 
@@ -62,9 +62,9 @@ up to 3 seconds (`--timeout` to change it).
 realme RMX3563 at 10.0.0.4:8099
 ```
 
-**How to verify:** the IP address printed should match the address shown on the phone's cam-remote
-setup screen ("Listening on `<ip>:<port>`"). If they differ, something else on the network is also
-serving the service type — unlikely, but worth a second look.
+**How to verify:** the IP address printed should match the address shown in the phone's
+notification shade ("Accepting commands on `<ip>:<port>`"). If they differ, something else on the
+network is also serving the service type — unlikely, but worth a second look.
 
 **If nothing is printed and the exit code is `3`:** this is a normal result on networks that block
 multicast (many corporate and guest Wi-Fi networks do). It does **not** mean the agent is broken —
@@ -77,21 +77,21 @@ read the address directly off the phone's screen and pass it explicitly to every
 
 ---
 
-## 2. `pair` — claim the agent's token
+## 2. `pair` — remember the agent's address
 
-Requires a physical action on the phone first: open cam-remote and tap **Pair a control machine**.
-This opens a 60-second, single-use window.
+No physical action on the phone is needed for this one — there is no code, no token, no handshake.
+`pair` just confirms the agent answers and writes its address to disk so later commands do not pay
+the mDNS round trip every time.
 
 ```bash
-# on the phone: tap "Pair a control machine", then within 60 seconds, on this machine:
 ./scripts/camremote pair
 ```
 
 **Expected output:**
 
 ```
-Paired with http://10.0.0.4:8099
-Token saved to /Users/you/.camremote.toml
+Found realme RMX3563 at http://10.0.0.4:8099
+Address saved to /Users/you/.camremote.toml
 ```
 
 **How to verify:**
@@ -100,15 +100,13 @@ Token saved to /Users/you/.camremote.toml
 cat ~/.camremote.toml
 ```
 
-should show a `host`, `port`, and a `token` matching the four-character token printed on the phone's
-setup screen (e.g. `token = "DQ4H"`). Every command after this point picks up that token
-automatically — you should not need `--token` again unless testing against a second device.
+should show a `host` and `port` matching the address `discover` reported. Every command after this
+point uses it automatically without needing `--host` — but skipping `pair` entirely also works fine,
+since every command falls back to a live discovery when nothing is configured.
 
-**If you get `error: No pairing window is open` (exit code `1`):** the 60-second window closed before
-the request arrived. Tap **Pair** on the phone again and retry promptly.
-
-**If pairing succeeds but a later command still reports `UNAUTHORIZED`:** the token was rotated on
-the device (someone tapped "Generate a new token") after this pairing. Re-run `pair`.
+**If it fails with `Could not reach the agent`:** the address in `--host` (or a stale
+`~/.camremote.toml`) does not answer. Run `discover` again, or pull down the notification shade on
+the phone for the current address.
 
 ---
 
@@ -310,7 +308,7 @@ error [PRECONDITION_FAILED]: Android will not let a background app start an acti
 ```
 
 Exit code `1`. Grant the permission on the phone (Settings → Apps → cam-remote → Display over other
-apps, or via the in-app setup screen), then retry.
+apps, or tap the app's icon to be walked through it), then retry.
 
 ---
 
@@ -470,17 +468,18 @@ file:
 ## 11. Verifying failure paths deliberately
 
 A command that only ever succeeds hasn't been tested. These are worth running once to confirm the
-agent's security and error-reporting behave as documented, not just its happy path.
+agent's error-reporting behaves as documented, not just its happy path.
 
-**Wrong token:**
+**Confirm there really is no credential to get wrong** — any client on the same network can run any
+command, with nothing to type:
 
 ```bash
-./scripts/camremote --token WRNG status
+./scripts/camremote --host 10.0.0.4 system-ping
 ```
-```
-error: Missing or invalid bearer token. Run 'camremote pair' after tapping Pair on the device.
-```
-Exit code `1`.
+
+should succeed with no prior `pair` and no config file at all. This is the trade recorded in
+[DESIGN.md §7](DESIGN.md#7-security): the project assumes one agent and one client share the LAN, so
+there is no gate to get past, correctly or otherwise.
 
 **No config and no `--host`, agent unreachable by discovery:**
 

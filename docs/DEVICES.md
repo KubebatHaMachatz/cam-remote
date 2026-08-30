@@ -12,7 +12,7 @@ things vary, and all three are handled rather than assumed:
 |---|---|---|
 | **Which app answers the camera intent** | `camera.open` may find nothing | An ordered chain of four strategies; the response says which one worked |
 | **OEM background policy** | The agent gets killed, or refuses to start an activity | Overlay permission, `WifiLock`, battery exemption, `START_STICKY`, restart on boot and on opening the app |
-| **Which addresses the device holds** | The setup screen shows an unreachable IP | Interfaces are ranked: Wi-Fi, then wired, then others, with mobile and tunnels last |
+| **Which addresses the device holds** | The wrong IP ends up in the notification | Interfaces are ranked: Wi-Fi, then wired, then others, with mobile and tunnels last |
 
 `camera.capture` is unaffected by all of it. It drives the sensor through CameraX rather than asking
 another app for a favour, which is why the assignment's rear-camera requirement is the *most*
@@ -88,7 +88,8 @@ resolves — it fails quietly rather than loudly.
 Everything works. Three quirks worth knowing:
 
 - **`adb shell pm grant` and `appops set` are refused**, even with USB debugging on. Permissions must
-  come from the setup screen. This is the single strongest argument for the app having one.
+  come from the on-device dialogs `LaunchActivity` triggers. This is the single strongest argument
+  for the app needing that one screen at all.
 - **The overlay-permission deep link is ignored.** `ACTION_MANAGE_OVERLAY_PERMISSION` with a
   `package:` URI opens the full app list rather than this app's page; scroll to cam-remote.
 - **Camera app:** `com.oplus.camera`, answers `still_image_camera`.
@@ -99,8 +100,9 @@ Everything works. Three quirks worth knowing:
 
 Everything works. Three findings, two of them surprising:
 
-- **`adb shell pm grant` and `appops set` are allowed**, unlike ColorOS. Setup on a Samsung can be
-  scripted end to end, which makes it much the fastest device to iterate on.
+- **`adb shell pm grant` and `appops set` are allowed**, unlike ColorOS. Granting permissions can be
+  scripted end to end for development, which makes it much the fastest device to iterate on. (The
+  shipped product never uses adb for this regardless — see `docs/DESIGN.md`.)
 - **`MAIN` + `CATEGORY_APP_CAMERA` returns zero handlers.** One UI simply does not declare that
   category, so a project relying on it alone would report "no camera app" on a flagship Samsung.
   This is the clearest argument for the strategy chain existing at all.
@@ -124,7 +126,8 @@ Everything works. Three findings, two of them surprising:
 ### Pixel / stock Android
 
 - **Camera app:** `com.google.android.GoogleCamera`. Closest to the documented behaviour, and the
-  only family where `adb shell pm grant` is a usable shortcut during development.
+  only family where `adb shell pm grant` is a usable shortcut during development, never for the
+  shipped app itself.
 
 ### Xiaomi (MIUI/HyperOS)
 
@@ -155,13 +158,13 @@ Everything works. Three findings, two of them surprising:
   This is the one place adb is genuinely useful, and it is a property of emulator networking rather
   than of the agent.
 - Google APIs images allow `adb shell pm grant`, which makes emulator setup much quicker than on a
-  retail handset.
+  retail handset (again, a development convenience only — the shipped app grants nothing this way).
 
 ## A note on running the instrumented tests
 
 `./gradlew :app:connectedDebugAndroidTest` reinstalls the app, which stops a running agent — so the
 device goes quiet until the agent is started again. Opening cam-remote on the handset restarts it
-(the setup screen repairs an agent the system has killed), and so does a reboot. Pass
+(opening the app repairs an agent the system has killed), and so does a reboot. Pass
 `-Pandroid.injected.androidTest.leaveApksInstalledAfterRun=true` to keep the APKs, and their granted
 permissions, in place between runs.
 

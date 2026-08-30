@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Walks through every capability, in the order the assignment lists them.
 #
-# Assumes `camremote pair` has already been run. Photos land in ./shots.
+# Discovers the agent automatically if it is not already paired. Photos land in ./shots.
 set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 camremote="$here/scripts/camremote"
