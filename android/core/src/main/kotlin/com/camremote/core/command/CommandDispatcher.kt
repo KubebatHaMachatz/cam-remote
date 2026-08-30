@@ -1,6 +1,7 @@
 package com.camremote.core.command
 
 import com.camremote.core.port.Clock
+import com.camremote.core.port.CommandLog
 import com.camremote.core.protocol.CommandRequest
 import com.camremote.core.protocol.CommandResponse
 import com.camremote.core.protocol.ErrorCode
@@ -21,6 +22,7 @@ class CommandDispatcher(
     private val registry: CommandRegistry,
     private val clock: Clock,
     private val locks: ResourceLocks = ResourceLocks(),
+    private val log: CommandLog = CommandLog.None,
 ) {
 
     /**
@@ -31,6 +33,20 @@ class CommandDispatcher(
      * transport that has to interpret exceptions is a transport that will get it wrong.
      */
     suspend fun dispatch(request: CommandRequest): CommandResponse {
+        log.received(request)
+        val response = run(request)
+        log.completed(request, response)
+        return response
+    }
+
+    /**
+     * Produces the response, leaving [dispatch] to record it.
+     *
+     * Split out because there are seven ways to answer and logging each of them at its own return
+     * would be seven chances to forget one. Cancellation escapes this function rather than
+     * returning, so it is deliberately never logged as an outcome.
+     */
+    private suspend fun run(request: CommandRequest): CommandResponse {
         val startedAt = clock.nowMillis()
 
         /** Milliseconds since the request arrived, for the response's timing field. */
