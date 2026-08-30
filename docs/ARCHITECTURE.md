@@ -42,7 +42,7 @@ authentication layer in this diagram because there is none in the app — see
 | `command` | `Command`, `CommandRegistry`, `CommandDispatcher`, `ResourceLocks`, `DeviceResource`. |
 | `command.impl` | The seven capabilities: ping, status, commands, getprop, open camera, camera-apps, capture. |
 | `port` | What the core needs from the outside: `CameraController`, `PhotoStore`, `PropertyReader`, `ActivityStarter`, `PermissionInspector`, `PermissionPrompt`, `Clock`. |
-| `logic` | Pure decisions worth testing: `CameraAppLaunch`, `CameraAppChoice`, `PhotoPaths`, `PhotoNaming`, `PropertyKeys`, `GetPropOutput`, `FirstAvailablePropertyReader`, `LanAddresses`. |
+| `logic` | Pure decisions worth testing: `CameraAppLaunch`, `CameraAppChoice`, `PhotoPaths`, `PhotoNaming`, `PhotoIndex`, `PropertyKeys`, `GetPropOutput`, `FirstAvailablePropertyReader`, `LanAddresses`. |
 
 `src/testFixtures` holds the fakes — `FakeClock`, `TestCommand` — and is published to `:app` so the
 transport tests drive real commands rather than re-inventing doubles.
@@ -109,10 +109,14 @@ Taking `camremote take-picture --out ./shots` end to end:
    45-second budget.
 6. **`CapturePhotoCommand`** checks the camera permission and that a rear sensor exists — calling
    `PermissionPrompt.requestAttention()` first if the permission is missing — asks `PhotoNaming` for
-   a filename and `PhotoStore` for a destination, then calls `CameraController.captureRearStill`.
+   a filename and `PhotoPaths` for a destination directory, both of which can still reject the
+   request before the shutter fires, then calls `CameraController.captureRearStill` with a private
+   scratch path.
 7. **`CameraXController`** binds `ImageCapture` to the service's lifecycle with no preview, takes the
    photograph, and reads back the dimensions.
-8. **`FileSystemPhotoStore.record`** mints an opaque id and appends it to the persistent index.
+8. **`MediaStorePhotoStore.publish`** copies the scratch file into `Documents/cam-remote/` through
+   MediaStore, mints an opaque id, and appends it to the persistent index. No storage permission is
+   involved — see [DESIGN.md §8](DESIGN.md#8-storage).
 9. The response travels back with a `downloadPath`, and the client **GETs `/v1/media/{id}`** and
    writes the JPEG next to the operator.
 
@@ -131,6 +135,7 @@ Useful when deciding where a change belongs:
 | How the device does it | `app/adapter/` |
 | Which HTTP status expresses a failure | `transport/http/CommandApi.kt` |
 | Which permission screen to show next | `app/setup/LaunchActivity.kt` |
+| Where a photo may be written | `core/logic/PhotoPaths.kt` |
 | What is wired to what | `app/di/AppContainer.kt` |
 | What the CLI prints | `python/camremote/commands/` |
 
@@ -138,7 +143,22 @@ Useful when deciding where a change belongs:
 
 | Suite | Count | Runs where |
 |---|---|---|
-| `:core` unit tests | 131 | Desktop JVM, no Android, about a second |
-| `:app` unit tests | 20 | Desktop JVM — Ktor routes and the filesystem store |
+| `:core` unit tests | 155 | Desktop JVM, no Android, about a second |
+| `:app` unit tests | 10 | Desktop JVM — the Ktor routes |
 | Python unit tests | 69 | Desktop, standard library only |
-| Instrumented | 5 | A real handset: real sensor, real property store, real socket |
+| Instrumented | 7 | A real handset: real sensor, real MediaStore, real socket |
+
+The `:app` count fell by ten when captures moved to MediaStore, and that is the boundary working
+rather than coverage being lost. The photo store used to be a filesystem store and could be tested
+on a desktop JVM; it now needs a `ContentResolver` and cannot. So the part with the edge cases —
+the index: truncated lines, entries whose photo the user has deleted, compaction — was extracted
+into `PhotoIndex` in `:core`, where it gained ten tests of its own, and `PhotoPaths` gained nine
+more as the destination rules tightened. What is left in the adapter is `ContentResolver` calls with
+no branching worth faking, covered by the instrumented suite.
+
+Robolectric is deliberately **not** used anywhere. It was considered for exactly this case and
+rejected: its MediaStore shadows do not implement scoped storage faithfully — `RELATIVE_PATH`,
+`IS_PENDING` and volume semantics in particular — so such a test would assert against a fake that
+behaves unlike any real device, and would pass while a handset failed. That is a worse outcome than
+having the instrumented test be the only coverage, for the same reason the project does not fake
+CameraX.

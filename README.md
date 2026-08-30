@@ -19,7 +19,7 @@ Opened com.oplus.camera/com.oplus.camera.component.CameraImageActivity
 
 $ camremote take-picture --out ./shots
 Captured 2448x3264, 2.98 MB in 1538 ms
-On the device: /storage/emulated/0/Android/data/com.camremote.app/files/Pictures/cam-remote/cli-demo.jpg
+On the device: Documents/cam-remote/cli-demo.jpg
 Saved to: shots/cli-demo.jpg
 ```
 
@@ -150,7 +150,7 @@ camremote getprop ro.product.model      # one property, or several at once
 camremote open-camera                   # open the camera app
 camremote open-camera --lens front      # best-effort hint; camera apps may ignore it
 camremote take-picture --out ./shots    # capture and download
-camremote take-picture --filename door --quality 80 --gallery
+camremote take-picture --filename door --quality 80 --path reports
 camremote take-picture --no-download    # leave it on the device
 camremote camera-apps                   # every camera app, and which one open-camera would use
 camremote device-report --out d.json    # everything about a device, for a compatibility matrix

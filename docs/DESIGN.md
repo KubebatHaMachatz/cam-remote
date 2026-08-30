@@ -283,16 +283,55 @@ README states the exposure plainly instead.
 
 ## 8. Storage
 
-Captures go to `getExternalFilesDir(Pictures)/cam-remote/`, which needs **no storage permission from
-API 29** and is removed cleanly when the app is uninstalled. `WRITE_EXTERNAL_STORAGE` would be the
-old answer and is not needed. Indexing a photo into the gallery is available per-request
-(`--gallery`) rather than by default, so the operator decides whether someone's camera roll fills up
-with images they did not take.
+Captures go to **`Documents/cam-remote/`** in the user's own shared storage, written through
+MediaStore, and **no storage permission is declared, requested or held**.
+
+Those two facts are the same fact. Under scoped storage an app may create files it owns anywhere in
+shared storage without any storage permission at all; the permission is only needed to read or
+modify files *somebody else* created. The agent only ever creates its own, so it needs nothing.
+`minSdk` is **29** precisely so this holds unconditionally — on API 26–28 the same write would have
+required `WRITE_EXTERNAL_STORAGE`, and rather than carry a runtime-permission path for a shrinking
+tail of devices, the app declines to run there. `WRITE_EXTERNAL_STORAGE` is additionally a **no-op**
+from API 30, so declaring it would have bought nothing and implied a great deal.
+
+The assignment asks to "handle permissions for camera access and storage access securely". The
+strongest form of that answer is not to request storage access carefully — it is to need none:
+`CAMERA` is the only permission `camera.capture` requires, and it is requested on demand at the
+moment a command first needs it (§7).
+
+**`Documents/` rather than `Pictures/`.** These are files an operator deliberately asked a remote
+agent to produce and will go looking for, not snapshots belonging in a camera roll. It also forces
+the `MediaStore.Files` collection: `MediaStore.Images` only accepts a `RELATIVE_PATH` under `DCIM/`
+or `Pictures/` and throws for anything else. A JPEG in `Documents/` is still indexed by MIME type,
+so a gallery app may show it anyway — that is the platform's choice, not something worth fighting.
+
+**Captures are written twice, on purpose.** The camera writes to a private scratch file in the cache
+directory, and only a *completed* capture is copied into `Documents`. Publishing directly would
+leave a torn file visible in the user's file manager whenever the sensor failed, and MediaStore
+offers no destination that can be rolled back once CameraX has started writing to it. The copy costs
+a few milliseconds, the scratch file is deleted on every path out, and anything a crash strands is
+cleared at the next start.
+
+**The destination parameter is the whole attack surface**, since a directory name arrives over the
+network and becomes a folder. `PhotoPaths` confines it: always relative to `Documents`, never
+absolute, no `..`, no empty or padded segments, a restricted character set, and bounded depth. It is
+a pure function in `:core` with sixteen tests. MediaStore would refuse an escape of its own accord,
+but relying on that would leave the agent's contract undefined and its error messages down to
+whatever the platform happened to throw.
 
 The photo index is **persisted** as JSON lines rather than kept in memory, because a foreground
 service is long-lived but not immortal: a download URL handed to the control machine should keep
-working after Android restarts the process. Entries whose files have gone are dropped on load, so the
-file cannot grow without bound.
+working after Android restarts the process. It lives in `PhotoIndex` in `:core` — deliberately not
+inside the store, because once photos are addressed by content URI the store needs a
+`ContentResolver` and can only run on a device, while the bookkeeping around it is where the edge
+cases are. Photos in shared storage now **outlive the app** and the user may delete one from a file
+manager at any time, so an id is dropped on load if the row it names has gone, and the file is
+compacted so it cannot grow without bound.
+
+One consequence worth stating plainly: because these files are the user's, they **survive
+uninstall** — and the agent's claim on them does not. After a reinstall the old captures are still
+in `Documents/cam-remote/`, but MediaStore no longer attributes them to this app, so their download
+ids are gone and the agent cannot read them back.
 
 ---
 

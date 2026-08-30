@@ -349,7 +349,7 @@ This is the command that most needs the resulting file inspected, not just the t
 
 ```
 Captured 2448x3264, 2.98 MB in 1538 ms
-On the device: /storage/emulated/0/Android/data/com.camremote.app/files/Pictures/cam-remote/camremote-20260828-191555-123.jpg
+On the device: Documents/cam-remote/camremote-20260828-191555-123.jpg
 Saved to: shots/camremote-20260828-191555-123.jpg
 ```
 
@@ -380,19 +380,26 @@ Saved to: shots/camremote-20260828-191555-123.jpg
 **With options:**
 
 ```bash
-./scripts/camremote take-picture --out ./shots --filename door --quality 60 --gallery
+./scripts/camremote take-picture --out ./shots --filename door --quality 60 --path reports
 ```
 
 ```
 Captured 2448x3264, 1.10 MB in 1204 ms
-On the device: /storage/emulated/0/Android/data/com.camremote.app/files/Pictures/cam-remote/door.jpg
+On the device: Documents/reports/door.jpg
 Saved to: shots/door.jpg
 ```
 
 Verify: the filename is exactly `door.jpg` (no timestamp appended, confirming `--filename` was
 honoured); the file size is meaningfully smaller than a `--quality 95` capture of the same scene
-(confirming the quality parameter took effect); and, with `--gallery`, the photo also shows up in the
-phone's own Gallery / Photos app (confirming `publishToGallery` reached MediaStore).
+(confirming the quality parameter took effect); and that the photo is genuinely reachable on the
+handset — open any file manager and look in **Documents / reports**, or check from this machine:
+
+```bash
+adb shell ls -l /sdcard/Documents/reports/
+```
+
+That last check is the point of the whole storage design: the file is in the user's own Documents
+folder, put there by an app holding no storage permission of any kind.
 
 **Leaving the photo on the device:**
 
@@ -403,14 +410,20 @@ phone's own Gallery / Photos app (confirming `publishToGallery` reached MediaSto
 The output stops after the "On the device:" line — no "Saved to:" line, and nothing appears in
 `./shots`. Verify by checking that directory is unchanged (`ls shots/`) before and after.
 
-**A destination outside the allowed roots (should be rejected):**
+**A destination that escapes Documents (should be rejected):**
 
 ```bash
 ./scripts/camremote take-picture --path /etc
 ```
 
 ```
-error [INVALID_PARAMS]: Parameter 'path' must be inside one of: ...
+error [INVALID_PARAMS]: Parameter 'path' is a directory inside 'Documents', not an absolute path, got '/etc'
+```
+
+Traversal is refused the same way, and neither reaches the sensor — no photograph is taken:
+
+```bash
+./scripts/camremote take-picture --path ../../escape
 ```
 
 Exit code `1`, and — importantly — nothing should have been written anywhere on the device. This

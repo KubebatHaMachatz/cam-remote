@@ -98,7 +98,10 @@ Everything works. Three quirks worth knowing:
 
 ### Samsung (One UI) — verified on SM-S921B (Galaxy S24), Android 14
 
-Everything works. Three findings, two of them surprising:
+Everything works, including the full no-UI permission flow described in `docs/DESIGN.md` §7 — a
+fresh install, tap the icon, work through the native dialogs, then a command that hits a still-missing
+permission successfully brings the operator back via the persistent notification. Several findings,
+most of them surprising:
 
 - **`adb shell pm grant` and `appops set` are allowed**, unlike ColorOS. Granting permissions can be
   scripted end to end for development, which makes it much the fastest device to iterate on. (The
@@ -116,12 +119,26 @@ Everything works. Three findings, two of them surprising:
   That looks wrong and is not — it is a Bixby trampoline that forwards immediately to
   `com.sec.android.app.camera/.Camera`, which is what ends up on screen. Worth knowing before
   someone reads the component name in a log and files a bug.
+- **"Display over other apps" survives a full uninstall/reinstall.** Every ordinary runtime
+  permission (camera, notifications) correctly resets to denied on a fresh install, as expected —
+  but the overlay grant did not, across three separate uninstall/reinstall cycles while testing
+  `LaunchActivity`'s on-demand prompt flow. One UI appears to key this particular grant to the
+  package name (or the app's signing certificate) rather than to the installed app instance. Worth
+  knowing if you are trying to reproduce the "overlay permission missing" precondition on this
+  device for a demo: a plain reinstall will not get you there, and `system.status` is the way to
+  confirm what is actually granted before assuming a fresh install means a fresh permission slate.
 - **Sleeping apps.** One UI's *Settings → Battery → Background usage limits* has "Sleeping apps" and
   "Deep sleeping apps" lists that will stop the agent regardless of Android's own rules. Add
   cam-remote to "Never sleeping apps"; the battery-optimisation exemption alone is not enough here.
 - Knox-managed devices may block the overlay permission by policy. On those, `camera.capture`,
   `device.getprop` and `system.status` still work, and `camera.open` reports `PRECONDITION_FAILED`
   accurately.
+- **Testing the on-demand prompt via repeated `adb shell pm revoke`/`am force-stop` cycles is
+  misleading.** After several rapid denials in a row, Android silently auto-resolves the next
+  `requestPermissions()` call with no dialog at all — the standard anti-dialog-spam heuristic, not a
+  bug in `PermissionPrompt`. A real user's single "Don't allow" tap does not trigger this; only
+  scripted, repeated adb-driven denials do. If you need to reproduce the missing-permission path for
+  a demo, prefer one genuine denial via the UI (or a clean reinstall) over cycling `pm revoke`.
 
 ### Pixel / stock Android
 
@@ -134,19 +151,79 @@ Everything works. Three findings, two of them surprising:
 - Requires "Autostart" to be enabled per-app, in addition to the battery exemption.
 - MIUI has its own overlay permission separate from the AOSP one; both may need granting.
 
-### Emulator (AOSP or Google APIs)
+### Emulator — verified on an API 37 arm64 Google Play AVD
+
+The whole suite passes here, including a real capture. Two things need setting up first.
+
+#### Creating the AVD when there is no `avdmanager`
+
+Android Studio installs the `emulator` binary and system images, but **not** `cmdline-tools` — so on
+a fresh machine there is no `avdmanager`, and `emulator -list-avds` is empty with no obvious way to
+change that. Installing `cmdline-tools` is one answer. Writing the two files `avdmanager` would have
+written is quicker, and worth recording because the failure mode ("no AVDs, no tool to make one") is
+an unhelpful place to start:
+
+```bash
+SDK=$HOME/Library/Android/sdk
+AVD=$HOME/.android/avd/camremote_test.avd
+mkdir -p "$AVD"
+
+cat > $HOME/.android/avd/camremote_test.ini <<EOF
+avd.ini.encoding=UTF-8
+path=$AVD
+path.rel=avd/camremote_test.avd
+target=android-37
+EOF
+
+cat > "$AVD/config.ini" <<'EOF'
+AvdId=camremote_test
+avd.ini.displayname=camremote test
+abi.type=arm64-v8a
+tag.id=google_apis_playstore
+image.sysdir.1=system-images/android-37.0/google_apis_playstore/arm64-v8a/
+image.androidVersion.api=37
+PlayStore.enabled=false
+hw.cpu.arch=arm64
+hw.ramSize=4096
+disk.dataPartition.size=6442450944
+hw.lcd.density=420
+hw.lcd.width=1080
+hw.lcd.height=2400
+hw.gpu.enabled=yes
+hw.gpu.mode=auto
+hw.keyboard=yes
+hw.camera.back=virtualscene
+hw.camera.front=emulated
+EOF
+
+$SDK/emulator/emulator -avd camremote_test -no-snapshot -no-boot-anim &
+```
+
+Match `image.sysdir.1` and `image.androidVersion.api` to whatever is actually in
+`$SDK/system-images/`; the rest transfers unchanged. `minSdk` is 29, so anything from API 29 up will
+do.
+
+#### The rear camera
 
 - **Give the AVD a rear camera**, or `camera.capture` correctly reports "this device reports no rear
-  camera". In `~/.android/avd/<name>.avd/config.ini`:
+  camera" — which is the command working, not failing. In `config.ini`:
 
   ```ini
   hw.camera.back=virtualscene
   ```
 
   `virtualscene` renders a synthetic room and produces genuine JPEGs; `emulated` gives a test
-  pattern. Either satisfies the capture path.
+  pattern. Either satisfies the capture path. Note that `pm list features` shows
+  `android.hardware.camera.front` and no matching `.back` entry even when the rear camera is
+  present — `hasRearCamera()` asks Camera2 for `LENS_FACING_BACK` rather than trusting the feature
+  list, and `camremote status` reporting `Rear camera: yes` is the check that means something.
 - **Bare AOSP system images often ship no camera app at all.** `camera.open` then fails with
   `DEVICE_ERROR` naming every strategy it tried — which is the correct answer, not a bug.
+- **A fresh AVD has no overlay or battery-optimisation grant**, and that turns out to be the most
+  useful property it has. `camera.open` returns `PRECONDITION_FAILED` naming the missing overlay
+  permission while `camera.capture` succeeds regardless, so the emulator is the easiest place to
+  demonstrate that the capture path really is independent of the launch path — the claim the top of
+  this document makes. On a fully set-up handset that distinction is invisible.
 - **Networking:** the emulator sits behind NAT on `10.0.2.x` and your host cannot reach it directly,
   so mDNS discovery will not find it. Use a port forward and `--host`:
 
@@ -157,8 +234,12 @@ Everything works. Three findings, two of them surprising:
 
   This is the one place adb is genuinely useful, and it is a property of emulator networking rather
   than of the agent.
-- Google APIs images allow `adb shell pm grant`, which makes emulator setup much quicker than on a
-  retail handset (again, a development convenience only — the shipped app grants nothing this way).
+- Google APIs **and Google Play** images both allow `adb shell pm grant`, which makes emulator setup
+  much quicker than on a retail handset (again, a development convenience only — the shipped app
+  grants nothing this way). Grant `CAMERA` before running the instrumented suite, or the three
+  capture tests `assumeTrue` their way to a pass without testing anything; check `skipped="0"` in
+  `app/build/outputs/androidTest-results/connected/debug/*.xml` rather than trusting BUILD
+  SUCCESSFUL.
 
 ## A note on running the instrumented tests
 
@@ -202,3 +283,4 @@ Run `camremote device-report --out matrix/<device>.json` on each new handset and
 |---|---|---|---|---|---|
 | realme RMX3563 (ColorOS) | 14 (API 34) | `com.oplus.camera` | `still_image_camera` | 2448×3264 | `pm grant` blocked; overlay deep link ignored |
 | samsung SM-S921B (One UI) | 14 (API 34) | `com.sec.android.app.camera` | `still_image_camera` | 4080×3060 | `pm grant` allowed; `APP_CAMERA` category unhandled; Bixby trampoline activity |
+| emulator arm64 Google Play | 17 (API 37) | none installed | n/a — overlay ungranted | 1280×960 | AVD hand-authored; `virtualscene` rear camera; capture works while `camera.open` correctly refuses |
