@@ -8,6 +8,7 @@ import com.camremote.app.adapter.AndroidPermissionPrompt
 import com.camremote.app.adapter.CameraXController
 import com.camremote.app.adapter.ExecGetPropReader
 import com.camremote.app.adapter.IntentActivityStarter
+import com.camremote.app.adapter.LogcatCommandLog
 import com.camremote.app.adapter.MediaStorePhotoStore
 import com.camremote.app.adapter.SystemPropertiesReader
 import com.camremote.app.config.ServerConfig
@@ -100,11 +101,18 @@ class AppContainer private constructor(private val context: Context) {
      * It takes a [LifecycleOwner] because CameraX binds its use cases to one, and the service is
      * the only thing in a UI-less app with a lifecycle worth binding to.
      */
+    /**
+     * Every command and its outcome, in logcat.
+     *
+     * Held here rather than built per dispatcher so the whole process narrates under one tag.
+     */
+    private val commandLog by lazy { LogcatCommandLog() }
+
     fun dispatcherFor(lifecycleOwner: LifecycleOwner): CommandDispatcher {
         val camera = CameraXController(context, lifecycleOwner)
         lateinit var registry: CommandRegistry
         registry = CommandRegistry(commands(camera) { registry.descriptors() })
-        return CommandDispatcher(registry, clock)
+        return CommandDispatcher(registry, clock, log = commandLog)
     }
 
     /**
