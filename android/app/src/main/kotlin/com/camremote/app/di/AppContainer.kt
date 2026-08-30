@@ -20,7 +20,6 @@ import com.camremote.core.command.impl.GetPropCommand
 import com.camremote.core.command.impl.ListCameraAppsCommand
 import com.camremote.core.command.impl.ListCommandsCommand
 import com.camremote.core.command.impl.OpenCameraCommand
-import com.camremote.core.command.impl.PingCommand
 import com.camremote.core.command.impl.StatusCommand
 import com.camremote.core.logic.FirstAvailablePropertyReader
 import com.camremote.core.port.CameraController
@@ -125,7 +124,6 @@ class AppContainer private constructor(private val context: Context) {
         camera: CameraController,
         descriptors: () -> List<CommandDescriptor>,
     ): List<Command> = listOf(
-        PingCommand(clock),
         ListCommandsCommand(descriptors),
         StatusCommand(permissions, ::deviceDescription, camera, clock),
         GetPropCommand(properties),

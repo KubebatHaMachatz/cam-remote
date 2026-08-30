@@ -1,24 +1,11 @@
-"""Liveness, readiness, and the device's own command catalog."""
+"""Readiness, the device clock, and the device's own command catalog."""
 
 from __future__ import annotations
 
+import time
+from datetime import datetime
 
 from camremote.commands.base import CliCommand, Context
-
-
-def _ping(context: Context) -> int:
-    """Reports round-trip time and the device clock.
-
-    The clock is included because a handset whose time is wrong produces capture timestamps
-    that make no sense later, and this is the cheapest place to notice.
-    """
-    response = context.agent.invoke("system.ping")
-    context.emit(
-        response.data,
-        f"Agent responded in {response.duration_ms} ms "
-        f"(device clock {response.data.get('deviceTimeMillis')})",
-    )
-    return 0
 
 
 #: What each grant actually enables, in terms of the commands an operator would try.
@@ -35,11 +22,48 @@ PERMISSION_EFFECTS = {
 }
 
 
-def _status(context: Context) -> int:
-    """Summarises the device and reports every permission it holds, granted or not.
+#: Below this, the difference is indistinguishable from the round trip that measured it.
+CLOCK_TOLERANCE_SECONDS = 5
 
-    The first questions after any failure are which grants are absent and what they cost, and
-    answering both from here saves walking over to wherever the phone is.
+
+def _clock_line(device_time_millis: object, duration_ms: object) -> str:
+    """Round-trip time, the device clock, and whether that clock can be trusted.
+
+    A handset whose time is wrong writes capture timestamps that make no sense a week later, and
+    the moment someone asks the device how it is doing is the cheapest place to notice. The
+    comparison is against this machine, which is an assumption worth stating rather than a fact:
+    it says the two disagree, not which of them is wrong.
+    """
+    answered = f"Answered in {duration_ms} ms"
+    if not isinstance(device_time_millis, int):
+        return answered
+
+    device_time = datetime.fromtimestamp(device_time_millis / 1000)
+    shown = device_time.strftime("%Y-%m-%d %H:%M:%S")
+    drift = (device_time_millis / 1000) - time.time()
+
+    if abs(drift) <= CLOCK_TOLERANCE_SECONDS:
+        return f"{answered}; device clock {shown} (in step with this machine)"
+
+    direction = "ahead of" if drift > 0 else "behind"
+    return f"{answered}; device clock {shown} ({_describe(abs(drift))} {direction} this machine)"
+
+
+def _describe(seconds: float) -> str:
+    """A drift a person can read: seconds, minutes, hours or days, never all four."""
+    for size, unit in ((86_400, "day"), (3_600, "hour"), (60, "minute"), (1, "second")):
+        if seconds >= size:
+            count = round(seconds / size)
+            return f"{count} {unit}{'s' if count != 1 else ''}"
+    return "under a second"
+
+
+def _status(context: Context) -> int:
+    """Summarises the device, its clock, and every permission it holds, granted or not.
+
+    This is the command an operator runs first and after any change. It absorbed the old
+    system-ping verb, whose entire output -- round-trip time and the device clock -- is two lines
+    that belong in a summary rather than behind a separate command.
     """
     response = context.agent.invoke("system.status")
     data = response.data
@@ -51,6 +75,7 @@ def _status(context: Context) -> int:
         f"{device.get('model', 'unknown device')} "
         f"(Android {device.get('androidRelease')}, API {device.get('apiLevel')})",
         f"Rear camera: {'yes' if data.get('hasRearCamera') else 'no'}",
+        _clock_line(data.get("deviceTimeMillis"), response.duration_ms),
     ]
 
     if permissions:
@@ -96,11 +121,6 @@ def _commands(context: Context) -> int:
     return 0
 
 
-PING = CliCommand(
-    name="system-ping",
-    help="Check the agent is reachable and report its clock.",
-    run=_ping,
-)
 
 STATUS = CliCommand(
     name="status",
