@@ -120,7 +120,7 @@ Build
   ro.build.version.release        = 14
   ro.build.version.sdk            = 34
   ro.build.version.security_patch = 2024-03-01
-  …ten more…
+  …nine more…
 
 Commands (6): camera.apps, camera.capture, camera.open, device.getprop, system.commands, system.status
 
@@ -191,24 +191,27 @@ gives the same information as raw JSON, for a script that wants to assert on it.
 **Expected output:**
 
 ```
-camera.apps - List every installed app that could answer a camera intent, and which one camera.open would pick.
-camera.capture - Take a still photograph with the rear camera and save it under Documents.
-    path (string, optional, default Documents/cam-remote): Destination directory, relative to the device's Documents folder.
-    filename (string, optional): Bare filename. Defaults to a UTC timestamp.
-    jpegQuality (int, optional, default 95): JPEG quality, 1-100.
-camera.open - Open the device's camera app. The lens hint is best-effort and app-dependent.
-    lens (string, optional): 'front' or 'rear'. A hint only; camera apps are free to ignore it.
-    package (string, optional): Open a specific camera app instead of the device default.
-device.getprop - Read one or more Android system properties.
-    key (string, optional): A single property name, e.g. ro.product.model.
-    keys (string_list, optional): Several property names to read in one request...
-system.commands - List every command this agent supports, with its parameters.
-system.status - Report the device, its permissions, and whether the agent is fully set up.
+Primary — what the agent is for:
+  camera.capture - Take a still photograph with the rear camera and save it under Documents.
+      path (string, optional, default Documents/cam-remote): Destination directory, relative to the device's Documents folder.
+      filename (string, optional): Bare filename. Defaults to a UTC timestamp.
+      jpegQuality (int, optional, default 95): JPEG quality, 1-100.
+  camera.open - Open the device's camera app. The lens hint is best-effort and app-dependent.
+      lens (string, optional): 'front' or 'rear'. A hint only; camera apps are free to ignore it.
+      package (string, optional): Open a specific camera app instead of the device default.
+  device.getprop - Read one or more Android system properties.
+      key (string, optional): A single property name, e.g. ro.product.model.
+      keys (string_list, optional): Several property names to read in one request. Takes precedence over 'key'.
+
+Diagnostics — how to inspect it:
+  camera.apps - List the camera apps this device offers, and which one camera.open would use.
+  system.commands - List every command this agent supports, with its parameters.
+  system.status - Report the device, its permissions, and whether the agent is fully set up.
 ```
 
-(The registry sorts by name, so this is the real order. The exact set reflects whatever is
-registered in `AppContainer.kt` on the device, so treat this output as the source of truth rather
-than the list above.)
+The agent declares a category per command and the client groups by it, sorting by name within each
+group. The exact set reflects whatever is registered in `AppContainer.kt` on the device, so treat
+this output as the source of truth rather than the list above.
 
 **How to verify:** this is read live from the device, not from a hardcoded list on the client side —
 if you add a command to the Android app and reinstall without touching the Python client at all, it

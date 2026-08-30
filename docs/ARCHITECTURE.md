@@ -14,7 +14,7 @@ way, see [DESIGN.md](DESIGN.md).
                     │   CommandDispatcher   (driving port)     │
                     │   lookup → lock → timeout → map errors   │
                     ├──────────────────────────────────────────┤
-                    │   CommandRegistry → Command × 7          │   :core
+                    │   CommandRegistry → Command × 6          │   :core
                     │   StatusCommand  GetPropCommand  …       │   no Android
                     ├──────────────────────────────────────────┤
                     │   Ports:  CameraController  PhotoStore   │
@@ -149,7 +149,7 @@ Useful when deciding where a change belongs:
 |---|---|---|
 | `:core` unit tests | 177 | Desktop JVM, no Android, about a second |
 | `:app` unit tests | 10 | Desktop JVM — the Ktor routes |
-| Python unit tests | 57 | Desktop, standard library only |
+| Python unit tests | 56 | Desktop, standard library only |
 | Instrumented | 7 | A real handset: real sensor, real MediaStore, real socket |
 
 The `:app` count fell by ten when captures moved to MediaStore, and that is the boundary working

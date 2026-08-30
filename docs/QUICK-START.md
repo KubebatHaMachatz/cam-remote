@@ -38,7 +38,7 @@ reboot; opening the app again starts it.
 Pull down the notification shade on the phone:
 
 ```
-cam-remote
+cam-remote is running
 Accepting commands on 10.0.0.4:8099
 ```
 
@@ -67,15 +67,17 @@ Wi-Fi network.
 
 | Command | What it does |
 |---|---|
+| **Primary** — what the agent is for | |
 | `take-picture` | Takes a photograph with the **rear** camera and downloads it. `--out DIR` where to save it here, `--filename NAME`, `--path DIR` where to save it on the phone, under `Documents` |
 | `open-camera` | Opens the phone's camera app. `--lens front\|rear` is a hint apps may ignore |
 | `getprop KEY...` | Reads Android system properties, any number in one request |
+| **Diagnostics** — how to inspect it | |
 | `status` | The whole picture: permissions, camera apps, build properties, catalog. `--out FILE` writes it as JSON |
-| `commands` | What this agent supports, asked of the agent itself |
+| `commands` | Returns the list of commands the agent supports, with descriptions |
 | `camera-apps` | Every camera app on the device, and which one `open-camera` would use |
 
-The first three are the project's reason for existing; the rest are for working out why one of them
-will not run. Add `--json` to any of them for machine-readable output.
+Those are the same two groups `camremote commands` prints, and the agent decides which is which.
+Add `--json` to any of them for machine-readable output.
 
 ```bash
 ./scripts/camremote --host 10.0.0.4 take-picture --out ./shots

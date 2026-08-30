@@ -70,7 +70,7 @@ Gradle arrives through the wrapper, and the build downloads the compile platform
 Studio also works — open the `android/` directory.
 
 **To run the control application:** Python 3.11 or newer. Nothing else. No virtualenv, no `pip
-install`; `tomllib` and everything else it uses ship with Python.
+install`; everything it uses ships with Python.
 
 **To use the two together:** the handset and the control machine on the same Wi-Fi network.
 
@@ -124,7 +124,7 @@ happens: not a separate setup ritual, but a consequence of the first command tha
 Pull down the notification shade on the phone. The agent's ongoing notification reads:
 
 ```
-cam-remote
+cam-remote is running
 Accepting commands on 10.0.0.4:8099
 ```
 
@@ -175,15 +175,16 @@ Exit codes, for scripting:
 | 2 | The command line was wrong |
 | 3 | No agent could be reached |
 
-`scripts/demo.sh` walks through the three assignment features in the order it lists them, either
-side of `status` and `commands`. The remaining diagnostic, `camera-apps`, is not in it;
+`scripts/demo.sh` walks through the three assignment features, either side of `status` and
+`commands`. It runs them 3-1-2 rather than 1-2-3 on purpose: opening the camera app leaves it
+holding the sensor, so the capture has to come after it. The remaining diagnostic, `camera-apps`, is not in it;
 `docs/DEVICES.md` covers it.
 
 ## Tests
 
 ```bash
 cd android && ./gradlew :core:test :app:testDebugUnitTest   # 187 unit tests
-cd python  && python3 -m unittest discover -s tests -t .    # 57 unit tests
+cd python  && python3 -m unittest discover -s tests -t .    # 56 unit tests
 ```
 
 Both suites run on a desktop with no device attached and no packages installed. The Python tests use

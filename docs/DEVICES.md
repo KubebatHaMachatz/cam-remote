@@ -10,7 +10,7 @@ things vary, and all three are handled rather than assumed:
 
 | Varies | Effect | How it is handled |
 |---|---|---|
-| **Which app answers the camera intent** | `camera.open` may find nothing | An ordered chain of four strategies; the response says which one worked |
+| **Which app answers the camera intent** | `camera.open` may find nothing | An ordered chain of three strategies, four when `--package` names an app; the response says which one worked |
 | **OEM background policy** | The agent gets killed, or refuses to start an activity | Overlay permission, `WifiLock`, battery exemption, `START_STICKY`, restart on boot and on opening the app |
 | **Which addresses the device holds** | The wrong IP ends up in the notification | Interfaces are ranked: Wi-Fi, then wired, then others, with mobile and tunnels last |
 
@@ -41,7 +41,7 @@ So the agent instead:
    stable alphabetical tie-break so repeated runs behave identically,
 3. and launches it **by explicit component**, which no chooser can intercept.
 
-`camremote camera-apps` shows the whole picture for any device:
+`camremote --host <ip> camera-apps` shows the whole picture for any device:
 
 ```
 camera.open would use: still_image_camera -> com.sec.android.app.camera/…AssistantActionActivity
@@ -74,7 +74,7 @@ The successful strategy comes back in the response, so a new device's behaviour 
 without picking it up:
 
 ```bash
-camremote --json open-camera | grep strategy
+camremote --host <ip> --json open-camera | grep strategy
 ```
 
 **If you add a strategy**, add a matching `<intent>` to the `<queries>` block in
@@ -223,7 +223,8 @@ do.
   pattern. Either satisfies the capture path. Note that `pm list features` shows
   `android.hardware.camera.front` and no matching `.back` entry even when the rear camera is
   present — `hasRearCamera()` asks Camera2 for `LENS_FACING_BACK` rather than trusting the feature
-  list, and `camremote status` reporting `Rear camera: yes` is the check that means something.
+  list, and `camremote --host <ip> status` reporting `Rear camera: yes` is the check that means
+  something.
 - **Bare AOSP system images often ship no camera app at all.** `camera.open` then fails with
   `DEVICE_ERROR` naming every strategy it tried — which is the correct answer, not a bug.
 - **A fresh AVD has no overlay or battery-optimisation grant**, and that turns out to be the most

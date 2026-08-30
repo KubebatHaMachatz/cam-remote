@@ -23,7 +23,7 @@ fits that shape:
 - **`:core`** holds the application logic — the protocol, the commands, the decision-making — and
   depends on nothing from Android.
 - **Ports** are the interfaces the core needs: `CameraController`, `PropertyReader`, `PhotoStore`,
-  `ActivityStarter`, `PermissionInspector`, `PermissionPrompt`, `Clock`.
+  `ActivityStarter`, `PermissionInspector`, `PermissionPrompt`, `CommandLog`, `Clock`.
 - **Adapters** in `:app` implement those with CameraX, `ProcessBuilder`, MediaStore, `Intent`,
   and so on.
 - The **driving port** is `CommandDispatcher`, the single entrance every transport goes through.
@@ -362,7 +362,7 @@ TDD only works on code that runs in milliseconds without a device — which is e
 hexagon delivers. All the decision-making lives in `:core` with no Android imports: target
 resolution, precondition checks, path validation, key sanitising, error mapping, filename
 generation, address ranking. Every port has a fake. That is 177 tests in `:core` that run in about a
-second, plus 10 in `:app` for the transport routes, and 57 for the Python client.
+second, plus 10 in `:app` for the transport routes, and 56 for the Python client.
 
 The adapters left over are three-to-ten-line pass-throughs with no branching. `CameraAppLaunch` is
 the clearest case: a pure function produces a `LaunchSpec` — tested against the no-camera-app and
@@ -392,7 +392,7 @@ loosening the shipped app's network policy to suit a test.
 
 ## 11. The control application
 
-**Standard library only.** `argparse`, `urllib`, `socket`, `tomllib`. A reviewer can run it on a
+**Standard library only.** `argparse`, `urllib`, `socket`. A reviewer can run it on a
 clean machine with no virtualenv and no network install between them and the demo. The tests use
 `unittest` for the same reason.
 
@@ -442,5 +442,6 @@ lines against `NsdManager`.
 - **OEM process killers** can stop the agent regardless of Android's own rules. Opening the app
   restarts it, and it restarts after a reboot, but a vendor protected-apps list may still be needed.
 - **No TLS**, as discussed above.
-- **One agent per control machine** in the config file. `--host` covers the rest; a named-profiles
-  file would be the natural next step.
+- **No saved addresses.** `--host` is required on every invocation, and nothing is remembered
+  between them. A named-profiles file would be the natural next step if that becomes tiresome; the
+  one this project had was deleted with mDNS discovery, for the reasons in §11.

@@ -33,6 +33,10 @@ class RebootCommand(private val rebooter: DeviceRebooter) : Command {
     override val descriptor = CommandDescriptor(
         name = "device.reboot",
         description = "Restart the device.",
+        // What `camremote commands` groups it under. DIAGNOSTIC is the default, so a capability
+        // the agent exists to provide has to say `category = CommandCategory.PRIMARY` or it
+        // quietly lands among the tools.
+        category = CommandCategory.PRIMARY,
         parameters = listOf(
             ParameterDescriptor(
                 name = "mode",
@@ -72,8 +76,10 @@ In `android/app/src/main/kotlin/com/camremote/app/di/AppContainer.kt`:
 ```
 
 **That is the whole change.** No route, no transport, no protocol edit, no client release. The
-command appears in `system.commands` immediately, so an existing `camremote commands` lists it, and
-`camremote --json` can invoke it. The CLI verb below is optional sugar.
+command appears in `system.commands` immediately, so an existing `camremote commands` lists it
+without being rebuilt — which is the extensibility claim, and it holds. *Running* it from the CLI
+needs the verb in step 4: `COMMANDS` is a closed tuple and there is no passthrough, so until then it
+is reachable only by posting the envelope to `/v1/command` yourself.
 
 ### 3. Test it first, of course
 
@@ -181,7 +187,7 @@ the right seam is the same one: a transport-agnostic check the dispatcher's call
 
 ### On the client side
 
-Implement `camremote.transport.base.Transport` — three methods — and hand it to `RemoteClient`. The
+Implement `camremote.transport.base.Transport` — one property and one method — and hand it to `RemoteClient`. The
 CLI takes a `connect` callable precisely so the transport can be swapped without touching any verb.
 
 ---
@@ -257,8 +263,8 @@ fun Application.commandApi(
     token: String,
 ) {
     intercept(ApplicationCallPipeline.Plugins) {
-        // /v1/health stays open: discovery has to be able to identify an agent before it can
-        // possibly know its secret.
+        // /v1/health stays open: a client needs to tell "wrong address" from "agent not running"
+        // before it has anything to authenticate with.
         if (call.request.path() == "/v1/health") return@intercept
 
         val presented = call.request.header(HttpHeaders.Authorization)
