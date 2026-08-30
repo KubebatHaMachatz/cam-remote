@@ -37,50 +37,6 @@ SURVEY_PROPERTIES = [
 ]
 
 
-def _configure(parser: argparse.ArgumentParser) -> None:
-    """Declares the optional file to write the full JSON report to."""
-    parser.add_argument(
-        "--out",
-        type=Path,
-        help="Also write the full report as JSON to this file.",
-    )
-
-
-def _collect(context: Context, command: str, params: dict | None = None) -> dict:
-    """Runs one command, turning a failure into part of the report rather than the end of it."""
-    try:
-        return dict(context.agent.invoke(command, params).data)
-    except CommandFailed as failure:
-        return {
-            "error": {
-                "code": failure.code,
-                "message": failure.message,
-                "remediation": failure.remediation,
-            }
-        }
-    except CamRemoteError as failure:
-        return {"error": {"code": "CLIENT", "message": str(failure)}}
-
-
-
-#: What each grant actually enables, in terms of the commands an operator would try.
-#:
-#: Only used to annotate a permission that is missing, where "what is now impossible" is the useful
-#: half. Anything the agent reports that is absent from this table is still listed, by name alone --
-#: the agent is the authority on its own permissions, exactly as it is for its own commands, and a
-#: newer agent must not have a grant silently dropped by an older client.
-PERMISSION_EFFECTS = {
-    "camera": "blocks take-picture",
-    "notifications": "hides the notification that shows the agent's address",
-    "canDrawOverlays": "blocks open-camera, which starts an app from the background",
-    "ignoringBatteryOptimizations": "the agent may stop answering with the screen off",
-}
-
-
-#: Below this, the difference is indistinguishable from the round trip that measured it.
-CLOCK_TOLERANCE_SECONDS = 5
-
-
 def _describe_camera_apps(camera_apps: dict) -> list[str]:
     """Describes every camera app found, per strategy, and which one would be launched."""
     lines = ["Camera apps"]
@@ -135,7 +91,6 @@ def _error(section: dict) -> str:
     return f"ERROR [{error['code']}] {error['message']}"
 
 
-
 def _collect(context: Context, command: str, params: dict | None = None) -> dict:
     """Runs one command, turning a failure into part of the answer rather than the end of it."""
     try:
@@ -150,6 +105,10 @@ def _collect(context: Context, command: str, params: dict | None = None) -> dict
         }
     except CamRemoteError as failure:
         return {"error": {"code": "CLIENT", "message": str(failure)}}
+
+
+#: Below this, the difference is indistinguishable from the round trip that measured it.
+CLOCK_TOLERANCE_SECONDS = 5
 
 
 def _clock_line(device_time_millis: object, duration_ms: object) -> str:
@@ -182,6 +141,20 @@ def _describe(seconds: float) -> str:
             count = round(seconds / size)
             return f"{count} {unit}{'s' if count != 1 else ''}"
     return "under a second"
+
+
+#: What each grant actually enables, in terms of the commands an operator would try.
+#:
+#: Only used to annotate a permission that is missing, where "what is now impossible" is the useful
+#: half. Anything the agent reports that is absent from this table is still listed, by name alone --
+#: the agent is the authority on its own permissions, exactly as it is for its own commands, and a
+#: newer agent must not have a grant silently dropped by an older client.
+PERMISSION_EFFECTS = {
+    "camera": "blocks take-picture",
+    "notifications": "hides the notification that shows the agent's address",
+    "canDrawOverlays": "blocks open-camera, which starts an app from the background",
+    "ignoringBatteryOptimizations": "the agent may stop answering with the screen off",
+}
 
 
 def _status(context: Context) -> int:
@@ -289,7 +262,6 @@ def _commands(context: Context) -> int:
 
     context.emit(response.data, *lines)
     return 0
-
 
 
 def _configure_status(parser: argparse.ArgumentParser) -> None:
