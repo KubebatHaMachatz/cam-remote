@@ -273,6 +273,49 @@ class CaptureTest(CliTestCase):
 class CatalogTest(CliTestCase):
     """Reporting what the device supports and whether it is ready."""
 
+    def _catalog_client(self):
+        return FakeClient(
+            {
+                "system.commands": {
+                    "commands": [
+                        {"name": "camera.apps", "description": "List camera apps.",
+                         "category": "DIAGNOSTIC"},
+                        {"name": "camera.capture", "description": "Take a photograph.",
+                         "category": "PRIMARY"},
+                        {"name": "camera.open", "description": "Open the camera app.",
+                         "category": "PRIMARY"},
+                        {"name": "device.getprop", "description": "Read a property.",
+                         "category": "PRIMARY"},
+                        {"name": "system.status", "description": "Report readiness.",
+                         "category": "DIAGNOSTIC"},
+                    ]
+                }
+            }
+        )
+
+    def test_separates_the_agent_s_capabilities_from_its_diagnostics(self):
+        self.run_cli("commands", client=self._catalog_client())
+        printed = self.out.getvalue()
+
+        primary = printed.index("camera.capture")
+        diagnostics_heading = printed.index("Diagnostics")
+        self.assertLess(printed.index("camera.open"), diagnostics_heading)
+        self.assertLess(primary, diagnostics_heading)
+        self.assertLess(diagnostics_heading, printed.index("system.status"))
+
+    def test_groups_a_command_with_no_category_among_the_diagnostics(self):
+        # An older agent says nothing about categories. Its commands must still be listed, and the
+        # harmless side of that guess is the tools rather than the headline capabilities.
+        client = FakeClient(
+            {"system.commands": {"commands": [{"name": "legacy.thing", "description": "Old."}]}}
+        )
+
+        self.run_cli("commands", client=client)
+        printed = self.out.getvalue()
+
+        self.assertIn("legacy.thing", printed)
+        self.assertLess(printed.index("Diagnostics"), printed.index("legacy.thing"))
+
     def test_lists_the_commands_the_device_supports(self):
         client = FakeClient(
             {
@@ -426,8 +469,8 @@ class CatalogTest(CliTestCase):
         self.assertIn("canDrawOverlays", self.out.getvalue())
 
 
-class DeviceReportTest(CliTestCase):
-    """A single command that gathers everything a new handset reveals."""
+class SurveyTest(CliTestCase):
+    """status gathers everything a new handset reveals, and survives a broken one."""
 
     def report_client(self, **overrides):
         results = {
@@ -464,7 +507,7 @@ class DeviceReportTest(CliTestCase):
         return FakeClient(results=results, **overrides)
 
     def test_summarises_the_device(self):
-        code = self.run_cli("device-report", client=self.report_client())
+        code = self.run_cli("status", client=self.report_client())
 
         self.assertEqual(0, code)
         output = self.out.getvalue()
@@ -475,7 +518,7 @@ class DeviceReportTest(CliTestCase):
     def test_gathers_everything_in_one_round_of_commands(self):
         client = self.report_client()
 
-        self.run_cli("device-report", client=client)
+        self.run_cli("status", client=client)
 
         self.assertEqual(
             {"system.status", "camera.apps", "device.getprop", "system.commands"},
@@ -483,7 +526,7 @@ class DeviceReportTest(CliTestCase):
         )
 
     def test_json_output_is_one_blob_to_paste_into_a_matrix(self):
-        self.run_cli("--json", "device-report", client=self.report_client())
+        self.run_cli("--json", "status", client=self.report_client())
 
         report = json.loads(self.out.getvalue())
         self.assertIn("status", report)
@@ -494,7 +537,7 @@ class DeviceReportTest(CliTestCase):
         with TemporaryDirectory() as directory:
             target = Path(directory) / "s24.json"
 
-            self.run_cli("device-report", "--out", str(target), client=self.report_client())
+            self.run_cli("status", "--out", str(target), client=self.report_client())
 
             self.assertIn("SM-S921B", json.loads(target.read_text())["status"]["device"]["model"])
 
@@ -511,7 +554,7 @@ class DeviceReportTest(CliTestCase):
             }
         )
 
-        code = self.run_cli("--json", "device-report", client=client)
+        code = self.run_cli("--json", "status", client=client)
 
         self.assertEqual(0, code)
         report = json.loads(self.out.getvalue())
@@ -527,7 +570,7 @@ class DeviceReportTest(CliTestCase):
             }
         )
 
-        self.run_cli("device-report", client=client)
+        self.run_cli("status", client=client)
 
         self.assertIn("PERMISSION_DENIED", self.out.getvalue())
 
