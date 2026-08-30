@@ -6,6 +6,7 @@ import com.camremote.core.port.CameraController
 import com.camremote.core.port.CaptureRequest
 import com.camremote.core.port.CaptureResult
 import com.camremote.core.port.PermissionInspector
+import com.camremote.core.protocol.CommandCategory
 import com.camremote.core.protocol.CommandDescriptor
 import com.camremote.core.protocol.DeviceDescription
 import com.camremote.core.protocol.ParameterDescriptor
@@ -145,5 +146,15 @@ class IntrospectionCommandsTest {
 
         assertEquals(JsonPrimitive(true), data["setupComplete"])
         assertTrue(data["missing"]!!.jsonArray.isEmpty())
+    }
+
+    @Test
+    fun `the introspection commands are diagnostics, not headline capabilities`() {
+        // They exist to explain the agent, not to be the reason it is running. Nothing declares
+        // this: DIAGNOSTIC is the default, and that is the behaviour being pinned.
+        assertEquals(
+            CommandCategory.DIAGNOSTIC,
+            ListCommandsCommand { emptyList() }.descriptor.category,
+        )
     }
 }

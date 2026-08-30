@@ -2,6 +2,7 @@ package com.camremote.core.command.impl
 
 import com.camremote.core.command.CommandOutcome.Success
 import com.camremote.core.port.PropertyReader
+import com.camremote.core.protocol.CommandCategory
 import com.camremote.core.protocol.InvalidParamsException
 import com.camremote.core.protocol.Params
 import kotlin.test.Test
@@ -105,6 +106,11 @@ class GetPropCommandTest {
     @Test
     fun `is free-threaded because reading a property blocks nothing`() {
         assertEquals(null, command.exclusiveResource)
+    }
+
+    @Test
+    fun `is one of the agent's reasons for existing, not a diagnostic`() {
+        assertEquals(CommandCategory.PRIMARY, command.descriptor.category)
     }
 
     @Test

@@ -10,6 +10,7 @@ import com.camremote.core.port.PermissionInspector
 import com.camremote.core.port.PermissionPrompt
 import com.camremote.core.port.PhotoStore
 import com.camremote.core.port.StoredPhoto
+import com.camremote.core.protocol.CommandCategory
 import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.InvalidParamsException
 import com.camremote.core.protocol.Params
@@ -296,6 +297,11 @@ class CapturePhotoCommandTest {
         val names = command().descriptor.parameters.map { it.name }
 
         assertEquals(listOf("path", "filename", "jpegQuality"), names)
+    }
+
+    @Test
+    fun `is one of the agent's reasons for existing, not a diagnostic`() {
+        assertEquals(CommandCategory.PRIMARY, command().descriptor.category)
     }
 
     @Test

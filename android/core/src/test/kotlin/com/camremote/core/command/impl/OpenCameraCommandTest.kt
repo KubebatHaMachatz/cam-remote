@@ -8,6 +8,7 @@ import com.camremote.core.port.LaunchSpec
 import com.camremote.core.port.ResolvedActivity
 import com.camremote.core.port.PermissionInspector
 import com.camremote.core.port.PermissionPrompt
+import com.camremote.core.protocol.CommandCategory
 import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.Params
 import com.camremote.core.protocol.PermissionStatus
@@ -189,6 +190,11 @@ class OpenCameraCommandTest {
     fun `contends for the camera so it cannot interleave with a capture`() {
         // Launching the camera app grabs the same hardware a capture is using.
         assertEquals(DeviceResource.CAMERA, command(FakeDevice()).exclusiveResource)
+    }
+
+    @Test
+    fun `is one of the agent's reasons for existing, not a diagnostic`() {
+        assertEquals(CommandCategory.PRIMARY, command(FakeDevice()).descriptor.category)
     }
 
     @Test
