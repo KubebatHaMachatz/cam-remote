@@ -228,6 +228,7 @@ new transport rather than a new feature, and
 | Document | What it covers |
 |---|---|
 | [docs/QUICK-START.md](docs/QUICK-START.md) | Install, grant, run — the shortest path to a photograph |
+| [docs/OVERVIEW-HE.md](docs/OVERVIEW-HE.md) | סקירה קצרה בעברית — the same overview in Hebrew |
 | [docs/DESIGN.md](docs/DESIGN.md) | Every significant decision and why it was made, including the ones rejected |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The layout of the code and the path a request takes through it |
 | [docs/EXTENDING.md](docs/EXTENDING.md) | Adding a command, adding a transport, swapping an implementation |
