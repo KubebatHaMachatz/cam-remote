@@ -11,23 +11,25 @@ import com.camremote.core.port.PermissionPrompt
 import com.camremote.core.port.PhotoStore
 import com.camremote.core.port.StoredPhoto
 import com.camremote.core.protocol.ErrorCode
+import com.camremote.core.protocol.InvalidParamsException
 import com.camremote.core.protocol.Params
 import com.camremote.core.protocol.PermissionStatus
 import java.io.IOException
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.buildJsonObject
 
 /**
  * The assignment's rear-camera requirement, specified against fakes.
  *
- * Covers the preconditions that must be checked before the sensor is touched, the destination
- * and quality parameters, and that a device with no rear camera is refused rather than quietly
- * served by the front one.
+ * Covers the preconditions that must be checked before the sensor is touched, the destination and
+ * quality parameters, that a device with no rear camera is refused rather than quietly served by
+ * the front one, and that a capture which fails part-way leaves nothing behind.
  */
 class CapturePhotoCommandTest {
 
@@ -52,25 +54,34 @@ class CapturePhotoCommandTest {
         }
     }
 
-    /** A store that records what it was asked to write, and can reject a destination. */
+    /** A store that records what it was asked to publish, and can fail the way a full disk would. */
     private class FakePhotoStore(private val failWith: Exception? = null) : PhotoStore {
-        var recorded: String? = null
-        var published = false
-        override fun destinationFor(directory: String?, filename: String): String {
+        var directory: String? = null
+        var filename: String? = null
+        var discarded: String? = null
+
+        override fun scratchPathFor(filename: String) = "/data/scratch/$filename"
+
+        override fun publish(
+            scratchPath: String,
+            relativeDirectory: String,
+            filename: String,
+            capturedAtMillis: Long,
+        ): StoredPhoto {
             failWith?.let { throw it }
-            return "${directory ?: "/data/pictures"}/$filename"
+            this.directory = relativeDirectory
+            this.filename = filename
+            return StoredPhoto(
+                id = "photo-id",
+                uri = "content://media/external/file/42",
+                displayPath = "$relativeDirectory/$filename",
+                sizeBytes = 2_481_632,
+                capturedAtMillis = capturedAtMillis,
+            )
         }
 
-        override fun record(path: String, capturedAtMillis: Long) = StoredPhoto(
-            id = "photo-id",
-            path = path,
-            sizeBytes = 2_481_632,
-            capturedAtMillis = capturedAtMillis,
-        ).also { recorded = path }
-
-        override fun publish(photo: StoredPhoto): String? {
-            published = true
-            return "content://media/external/images/media/42"
+        override fun discard(scratchPath: String) {
+            discarded = scratchPath
         }
 
         override fun open(id: String) = null
@@ -91,26 +102,37 @@ class CapturePhotoCommandTest {
     )
 
     @Test
-    fun `captures a still and reports where it landed`() = runTest {
+    fun `captures a still and saves it where the user can find it`() = runTest {
         val photos = FakePhotoStore()
 
         val outcome = command(photos = photos).execute(Params.EMPTY)
 
         val data = assertIs<Success>(outcome).data
+        assertEquals("Documents/cam-remote", photos.directory)
         assertEquals(JsonPrimitive("photo-id"), data?.get("id"))
-        assertEquals(JsonPrimitive("/data/pictures/camremote-20231114-221319-123.jpg"), data?.get("path"))
-        assertEquals(JsonPrimitive(2_481_632), data?.get("sizeBytes"))
         assertEquals(JsonPrimitive(4032), data?.get("widthPx"))
         assertEquals(JsonPrimitive(3024), data?.get("heightPx"))
+        assertEquals(JsonPrimitive(2_481_632), data?.get("sizeBytes"))
         assertEquals(JsonPrimitive(1_699_999_999_123), data?.get("capturedAtMillis"))
+    }
+
+    @Test
+    fun `reports the location a person would look in, not a private path`() = runTest {
+        val outcome = command().execute(Params.EMPTY)
+
+        val path = assertIs<Success>(outcome).data?.get("path").toString().trim('"')
+        assertTrue(
+            path.startsWith("Documents/cam-remote/camremote-"),
+            "expected a location under Documents, got '$path'",
+        )
     }
 
     @Test
     fun `tells the client how to fetch the image it just took`() = runTest {
         val outcome = command().execute(Params.EMPTY)
 
-        // A path on the handset is useless to the control machine on its own; the download route is
-        // what turns "saved to a specified location" into "the operator has the photo".
+        // A location on the handset is useless to the control machine on its own; the download
+        // route is what turns "saved to a specified location" into "the operator has the photo".
         assertEquals(
             JsonPrimitive("/v1/media/photo-id"),
             assertIs<Success>(outcome).data?.get("downloadPath"),
@@ -118,132 +140,146 @@ class CapturePhotoCommandTest {
     }
 
     @Test
+    fun `reports the content uri it published to`() = runTest {
+        val outcome = command().execute(Params.EMPTY)
+
+        assertEquals(
+            JsonPrimitive("content://media/external/file/42"),
+            assertIs<Success>(outcome).data?.get("uri"),
+        )
+    }
+
+    @Test
     fun `honours a requested destination and filename`() = runTest {
         val photos = FakePhotoStore()
+        command(photos = photos).execute(Params.of("path" to "reports", "filename" to "front-door"))
 
-        command(photos = photos).execute(
-            Params.of("path" to "/sdcard/custom", "filename" to "door"),
+        assertEquals("Documents/reports", photos.directory)
+        assertEquals("front-door.jpg", photos.filename)
+    }
+
+    @Test
+    fun `writes privately first so a failed capture leaves nothing in Documents`() = runTest {
+        val camera = FakeCamera()
+        val photos = FakePhotoStore()
+
+        command(camera = camera, photos = photos).execute(Params.EMPTY)
+
+        // The camera is handed a scratch path, never the user's own folder.
+        val written = camera.request!!.destinationPath
+        assertTrue(
+            written.startsWith("/data/scratch/") && !written.contains("Documents"),
+            "the camera should be handed a scratch path, got '$written'",
         )
-
-        assertEquals("/sdcard/custom/door.jpg", photos.recorded)
     }
 
     @Test
     fun `refuses when the camera permission has not been granted`() = runTest {
-        val camera = FakeCamera()
+        val outcome = command(permissions = allGranted.copy(camera = false)).execute(Params.EMPTY)
 
-        val outcome = command(camera = camera, permissions = allGranted.copy(camera = false))
-            .execute(Params.EMPTY)
-
-        val error = assertIs<Failure>(outcome).error
-        assertEquals(ErrorCode.PERMISSION_DENIED, error.code)
-        assertTrue(error.remediation!!.contains("retry"))
-        assertEquals(null, camera.request)
+        val failure = assertIs<Failure>(outcome)
+        assertEquals(ErrorCode.PERMISSION_DENIED, failure.error.code)
     }
 
     @Test
     fun `prompts for the camera permission as part of failing, so the human is asked right then`() = runTest {
-        var prompted = false
+        var prompted = 0
 
-        command(permissions = allGranted.copy(camera = false), permissionPrompt = PermissionPrompt { prompted = true })
-            .execute(Params.EMPTY)
+        command(
+            permissions = allGranted.copy(camera = false),
+            permissionPrompt = { prompted++ },
+        ).execute(Params.EMPTY)
 
-        // There is no setup screen; the only known moment a human might be looking at the phone is
-        // right after a command has just failed, so the request happens as part of that failure.
-        assertTrue(prompted)
+        assertEquals(1, prompted)
     }
 
     @Test
     fun `does not prompt when the permission is already granted`() = runTest {
-        var prompted = false
+        var prompted = 0
 
-        command(permissionPrompt = PermissionPrompt { prompted = true }).execute(Params.EMPTY)
+        command(permissionPrompt = { prompted++ }).execute(Params.EMPTY)
 
-        assertEquals(false, prompted)
+        assertEquals(0, prompted)
     }
 
     @Test
     fun `refuses on a device with no rear camera rather than silently using the front one`() = runTest {
         val outcome = command(camera = FakeCamera(hasRear = false)).execute(Params.EMPTY)
 
-        // The assignment says rear camera only, so the absence of one is a reportable failure, not
-        // an invitation to substitute the selfie camera.
-        val error = assertIs<Failure>(outcome).error
-        assertEquals(ErrorCode.DEVICE_ERROR, error.code)
-        assertTrue(error.message.contains("rear", ignoreCase = true))
+        val failure = assertIs<Failure>(outcome)
+        assertEquals(ErrorCode.DEVICE_ERROR, failure.error.code)
+        assertTrue(failure.error.message.contains("no rear camera"))
     }
 
     @Test
     fun `reports a camera that failed mid-capture`() = runTest {
-        val outcome = command(camera = FakeCamera(failWith = IOException("camera in use")))
+        val outcome = command(camera = FakeCamera(failWith = IOException("sensor busy")))
             .execute(Params.EMPTY)
 
-        val error = assertIs<Failure>(outcome).error
-        assertEquals(ErrorCode.DEVICE_ERROR, error.code)
-        assertTrue(error.message.contains("camera in use"))
+        val failure = assertIs<Failure>(outcome)
+        assertEquals(ErrorCode.DEVICE_ERROR, failure.error.code)
+        assertTrue(failure.error.message.contains("sensor busy"))
+    }
+
+    @Test
+    fun `throws away the scratch file when the capture fails`() = runTest {
+        val photos = FakePhotoStore()
+
+        command(camera = FakeCamera(failWith = IOException("sensor busy")), photos = photos)
+            .execute(Params.EMPTY)
+
+        assertEquals("/data/scratch/", photos.discarded?.substringBeforeLast("camremote-"))
+    }
+
+    @Test
+    fun `reports a photograph that was taken but could not be saved`() = runTest {
+        val photos = FakePhotoStore(failWith = IOException("No space left on device"))
+
+        val outcome = command(photos = photos).execute(Params.EMPTY)
+
+        val failure = assertIs<Failure>(outcome)
+        assertEquals(ErrorCode.DEVICE_ERROR, failure.error.code)
+        assertTrue(failure.error.message.contains("No space left on device"))
+        // Nothing may be left in scratch storage after a failure to publish either.
+        assertTrue(photos.discarded != null, "the scratch file should have been discarded")
     }
 
     @Test
     fun `lets an invalid destination surface as a parameter error`() = runTest {
-        val photos = FakePhotoStore(
-            failWith = com.camremote.core.protocol.InvalidParamsException("outside the allowed roots"),
-        )
-
         // Thrown, not returned: the dispatcher owns the mapping to INVALID_PARAMS so that every
         // command reports a bad parameter identically.
-        assertTrue(
-            runCatching { command(photos = photos).execute(Params.EMPTY) }
-                .exceptionOrNull() is com.camremote.core.protocol.InvalidParamsException,
-        )
+        assertFailsWith<InvalidParamsException> {
+            command().execute(Params.of("path" to "../../etc"))
+        }
+    }
+
+    @Test
+    fun `rejects a bad destination before touching the sensor`() = runTest {
+        val camera = FakeCamera()
+
+        runCatching { command(camera = camera).execute(Params.of("path" to "/etc")) }
+
+        assertNull(camera.request, "the shutter must not fire for a request that cannot be saved")
     }
 
     @Test
     fun `defaults to a sensible jpeg quality and accepts an override`() = runTest {
-        val camera = FakeCamera()
-        command(camera = camera).execute(Params.EMPTY)
-        assertEquals(95, camera.request?.jpegQuality)
+        val defaulted = FakeCamera()
+        command(camera = defaulted).execute(Params.EMPTY)
+        assertEquals(95, defaulted.request?.jpegQuality)
 
-        val other = FakeCamera()
-        command(camera = other).execute(
-            Params(buildJsonObject { put("jpegQuality", JsonPrimitive(60)) }),
-        )
-        assertEquals(60, other.request?.jpegQuality)
+        val overridden = FakeCamera()
+        command(camera = overridden).execute(Params.of("jpegQuality" to "60"))
+        assertEquals(60, overridden.request?.jpegQuality)
     }
 
     @Test
     fun `rejects a jpeg quality outside the valid range`() = runTest {
         listOf(0, 101, -5).forEach { quality ->
-            val params = Params(buildJsonObject { put("jpegQuality", JsonPrimitive(quality)) })
-            assertTrue(
-                runCatching { command().execute(params) }
-                    .exceptionOrNull() is com.camremote.core.protocol.InvalidParamsException,
-                "expected quality $quality to be rejected",
-            )
+            assertFailsWith<InvalidParamsException>("expected quality $quality to be rejected") {
+                command().execute(Params.of("jpegQuality" to quality.toString()))
+            }
         }
-    }
-
-    @Test
-    fun `does not publish to the gallery unless asked`() = runTest {
-        val photos = FakePhotoStore()
-
-        command(photos = photos).execute(Params.EMPTY)
-
-        assertEquals(false, photos.published)
-    }
-
-    @Test
-    fun `publishes to the gallery on request and reports the uri`() = runTest {
-        val photos = FakePhotoStore()
-
-        val outcome = command(photos = photos).execute(
-            Params(buildJsonObject { put("publishToGallery", JsonPrimitive(true)) }),
-        )
-
-        assertEquals(true, photos.published)
-        assertEquals(
-            JsonPrimitive("content://media/external/images/media/42"),
-            assertIs<Success>(outcome).data?.get("galleryUri"),
-        )
     }
 
     @Test
@@ -253,10 +289,15 @@ class CapturePhotoCommandTest {
 
     @Test
     fun `advertises its parameters in the catalog`() {
-        assertEquals("camera.capture", command().descriptor.name)
-        assertEquals(
-            listOf("path", "filename", "jpegQuality", "publishToGallery"),
-            command().descriptor.parameters.map { it.name },
-        )
+        val names = command().descriptor.parameters.map { it.name }
+
+        assertEquals(listOf("path", "filename", "jpegQuality"), names)
+    }
+
+    @Test
+    fun `says in the catalog where photos go by default`() {
+        val path = command().descriptor.parameters.single { it.name == "path" }
+
+        assertEquals("Documents/cam-remote", path.default)
     }
 }

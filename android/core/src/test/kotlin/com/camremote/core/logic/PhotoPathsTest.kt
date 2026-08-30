@@ -1,137 +1,133 @@
 package com.camremote.core.logic
 
 import com.camremote.core.protocol.InvalidParamsException
-import java.io.File
-import java.nio.file.Files
-import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 
 /**
- * `camera.capture` accepts a destination directory, which means a path arrives from the network and
- * is used to write a file. Confining it to a set of allowed roots is the whole security story for
- * that feature, so it is specified here in detail.
+ * `camera.capture` accepts a destination directory, which means a directory name arrives from the
+ * network and is used to create a folder in the user's own `Documents`. MediaStore rejects an
+ * escape attempt of its own accord, but relying on that would leave the agent's contract undefined,
+ * so the rule is settled here where it can be stated and tested precisely.
  */
 class PhotoPathsTest {
 
-    private val allowedRoot: File = Files.createTempDirectory("camremote-allowed").toFile()
-    private val forbiddenRoot: File = Files.createTempDirectory("camremote-forbidden").toFile()
-
-    @AfterTest
-    fun cleanUp() {
-        allowedRoot.deleteRecursively()
-        forbiddenRoot.deleteRecursively()
+    @Test
+    fun `defaults to the agent's own folder under Documents`() {
+        assertEquals("Documents/cam-remote", PhotoPaths.resolveRelativeDirectory(null))
     }
 
     @Test
-    fun `falls back to the default root when no directory is requested`() {
-        val resolved = PhotoPaths.resolve(
-            defaultRoot = allowedRoot,
-            allowedRoots = listOf(allowedRoot),
-            requestedDirectory = null,
-            filename = "a.jpg",
-        )
-
-        assertEquals(File(allowedRoot, "a.jpg").canonicalPath, resolved.canonicalPath)
-    }
-
-    @Test
-    fun `accepts an absolute directory inside an allowed root`() {
-        val nested = File(allowedRoot, "captures/today")
-
-        val resolved = PhotoPaths.resolve(
-            defaultRoot = allowedRoot,
-            allowedRoots = listOf(allowedRoot),
-            requestedDirectory = nested.absolutePath,
-            filename = "a.jpg",
-        )
-
-        assertEquals(File(nested, "a.jpg").canonicalPath, resolved.canonicalPath)
-    }
-
-    @Test
-    fun `treats a relative directory as relative to the default root`() {
-        val resolved = PhotoPaths.resolve(
-            defaultRoot = allowedRoot,
-            allowedRoots = listOf(allowedRoot),
-            requestedDirectory = "captures/today",
-            filename = "a.jpg",
-        )
-
-        assertEquals(File(allowedRoot, "captures/today/a.jpg").canonicalPath, resolved.canonicalPath)
-    }
-
-    @Test
-    fun `rejects a directory outside every allowed root`() {
-        assertFailsWith<InvalidParamsException> {
-            PhotoPaths.resolve(
-                defaultRoot = allowedRoot,
-                allowedRoots = listOf(allowedRoot),
-                requestedDirectory = forbiddenRoot.absolutePath,
-                filename = "a.jpg",
-            )
+    fun `treats a blank directory as no directory at all`() {
+        listOf("", "   ").forEach {
+            assertEquals("Documents/cam-remote", PhotoPaths.resolveRelativeDirectory(it))
         }
     }
 
     @Test
-    fun `rejects traversal out of an allowed root`() {
-        listOf("..", "../..", "captures/../../elsewhere", allowedRoot.absolutePath + "/../escape")
+    fun `places a requested directory under Documents`() {
+        assertEquals("Documents/reports", PhotoPaths.resolveRelativeDirectory("reports"))
+    }
+
+    @Test
+    fun `accepts nested directories`() {
+        assertEquals(
+            "Documents/cam-remote/2026-08-30",
+            PhotoPaths.resolveRelativeDirectory("cam-remote/2026-08-30"),
+        )
+    }
+
+    @Test
+    fun `accepts a redundant Documents prefix rather than doubling it`() {
+        // 'Documents/reports' and 'reports' name the same place; a caller who spells out the
+        // primary directory should not end up in Documents/Documents/reports.
+        assertEquals("Documents/reports", PhotoPaths.resolveRelativeDirectory("Documents/reports"))
+    }
+
+    @Test
+    fun `allows Documents itself`() {
+        listOf("Documents", "Documents/").forEach {
+            assertEquals("Documents", PhotoPaths.resolveRelativeDirectory(it))
+        }
+    }
+
+    @Test
+    fun `tolerates a trailing slash`() {
+        assertEquals("Documents/reports", PhotoPaths.resolveRelativeDirectory("reports/"))
+    }
+
+    @Test
+    fun `rejects an absolute path`() {
+        listOf("/sdcard/Documents", "/etc", "/").forEach { attempt ->
+            assertFailsWith<InvalidParamsException>("expected '$attempt' to be rejected") {
+                PhotoPaths.resolveRelativeDirectory(attempt)
+            }
+        }
+    }
+
+    @Test
+    fun `rejects traversal out of Documents`() {
+        listOf("..", "../..", "reports/../../elsewhere", "Documents/../Download").forEach { attempt ->
+            assertFailsWith<InvalidParamsException>("expected '$attempt' to be rejected") {
+                PhotoPaths.resolveRelativeDirectory(attempt)
+            }
+        }
+    }
+
+    @Test
+    fun `rejects a single dot segment`() {
+        assertFailsWith<InvalidParamsException> { PhotoPaths.resolveRelativeDirectory("reports/./x") }
+    }
+
+    @Test
+    fun `rejects an empty directory name`() {
+        assertFailsWith<InvalidParamsException> { PhotoPaths.resolveRelativeDirectory("reports//x") }
+    }
+
+    @Test
+    fun `rejects a windows separator rather than silently treating it as a name`() {
+        assertFailsWith<InvalidParamsException> { PhotoPaths.resolveRelativeDirectory("reports\\x") }
+    }
+
+    @Test
+    fun `rejects characters that are not valid in a directory name`() {
+        listOf("rep:orts", "rep*orts", "rep?orts", "rep\"orts", "rep<orts", "rep|orts", "rep\norts")
             .forEach { attempt ->
                 assertFailsWith<InvalidParamsException>("expected '$attempt' to be rejected") {
-                    PhotoPaths.resolve(
-                        defaultRoot = allowedRoot,
-                        allowedRoots = listOf(allowedRoot),
-                        requestedDirectory = attempt,
-                        filename = "a.jpg",
-                    )
+                    PhotoPaths.resolveRelativeDirectory(attempt)
                 }
             }
     }
 
     @Test
-    fun `rejects a symlink pointing outside the allowed roots`() {
-        val link = File(allowedRoot, "sneaky")
-        Files.createSymbolicLink(link.toPath(), forbiddenRoot.toPath())
-
-        // Comparing textual prefixes would accept this; the check canonicalises first.
-        assertFailsWith<InvalidParamsException> {
-            PhotoPaths.resolve(
-                defaultRoot = allowedRoot,
-                allowedRoots = listOf(allowedRoot),
-                requestedDirectory = link.absolutePath,
-                filename = "a.jpg",
-            )
-        }
+    fun `trims whitespace around the whole parameter`() {
+        assertEquals("Documents/reports", PhotoPaths.resolveRelativeDirectory("  reports  "))
     }
 
     @Test
-    fun `does not confuse a sibling directory sharing a name prefix`() {
-        val sibling = File(allowedRoot.parentFile, allowedRoot.name + "-extra")
-        sibling.mkdirs()
-        try {
-            assertFailsWith<InvalidParamsException> {
-                PhotoPaths.resolve(
-                    defaultRoot = allowedRoot,
-                    allowedRoots = listOf(allowedRoot),
-                    requestedDirectory = sibling.absolutePath,
-                    filename = "a.jpg",
-                )
+    fun `rejects a directory name padded with spaces`() {
+        // Padding is invisible in a file manager and is stripped by some filesystems, so two
+        // captures could silently disagree about where they went. Whitespace around the parameter
+        // as a whole is only noise and is trimmed above; this is about a name in the middle of it.
+        listOf("reports/ x", "reports/x /y").forEach { attempt ->
+            assertFailsWith<InvalidParamsException>("expected '$attempt' to be rejected") {
+                PhotoPaths.resolveRelativeDirectory(attempt)
             }
-        } finally {
-            sibling.deleteRecursively()
         }
     }
 
     @Test
-    fun `accepts a directory under any of several allowed roots`() {
-        val resolved = PhotoPaths.resolve(
-            defaultRoot = allowedRoot,
-            allowedRoots = listOf(allowedRoot, forbiddenRoot),
-            requestedDirectory = forbiddenRoot.absolutePath,
-            filename = "a.jpg",
-        )
+    fun `rejects an unreasonably long directory name`() {
+        assertFailsWith<InvalidParamsException> {
+            PhotoPaths.resolveRelativeDirectory("a".repeat(200))
+        }
+    }
 
-        assertEquals(File(forbiddenRoot, "a.jpg").canonicalPath, resolved.canonicalPath)
+    @Test
+    fun `rejects an unreasonably deep directory`() {
+        assertFailsWith<InvalidParamsException> {
+            PhotoPaths.resolveRelativeDirectory((1..12).joinToString("/") { "d$it" })
+        }
     }
 }
