@@ -90,11 +90,17 @@ start an app for the first time without it — and it is also the last one you a
 2. A Settings screen opens for **"Display over other apps"**. Turn it on and go back. This is what
    lets a background process open the camera app at all, and the exemption Android 14 requires
    before a background service may touch the camera.
+3. A dialog asks to **stop optimising battery usage**, so the agent keeps answering with the screen
+   off. Allow it.
 
-The app draws nothing of its own at any point — everything above is a native Android dialog or a
-system Settings screen. If you miss one, or the device asks for something else later (typically
-"Ignore battery optimisation", so the agent keeps answering with the screen off), tap the icon again
-to pick up wherever setup left off.
+Each step opens as soon as you finish the one before, so a fresh install is set up in a single
+sitting — there is no need to reopen the app between them. The app draws nothing of its own at any
+point: everything above is a native Android dialog or a system Settings screen.
+
+Declining any step is fine and does not block the rest; that step simply stays missing. Whatever is
+outstanding is offered again the next time a command needs it, so `camremote take-picture` with the
+camera permission missing puts the dialog back on screen by itself. Tapping the icon again also
+picks up wherever setup left off.
 
 `CAMERA` cannot be granted any other way: it is a dangerous runtime permission, and Android is built
 so that an app cannot grant itself one, screen or no screen. Zero-touch setup is only possible for a
