@@ -25,9 +25,10 @@ import com.camremote.app.transport.http.HttpCommandServer
 import com.camremote.app.transport.http.commandApi
 
 /**
- * The agent itself: a foreground service that owns the HTTP server, the mDNS advertisement and the
- * Wi-Fi lock, and runs for as long as Android lets it — there is no on/off switch, because there is
- * no screen to put one on.
+ * The agent itself: a foreground service that owns the HTTP server and the Wi-Fi lock, and runs for
+ * as long as Android lets it. Its notification is the whole of its interface — it reports the
+ * address to point a client at, keeps that address current as the device's own changes, and carries
+ * the only way to switch the agent off.
  *
  * A service rather than an activity because the app has no control UI by design — there is nothing
  * for a user to look at while commands are being served; [LaunchActivity] is a permission trampoline,
@@ -54,8 +55,8 @@ class RemoteControlService : LifecycleService() {
     }
 
     /**
-     * Starts the agent. There is no corresponding stop from within the app — nothing to send it
-     * from, with no UI — so uninstalling is how the agent is turned off.
+     * Starts the agent. The way back out is the notification's "Terminate service" action, which
+     * sends [ACTION_STOP] to this same service.
      *
      * Returns START_STICKY so Android brings the agent back if it reclaims the process: an
      * agent that has quietly stopped answering is worse than a service that was never running.
@@ -93,7 +94,7 @@ class RemoteControlService : LifecycleService() {
         stopSelf()
     }
 
-    /** Releases everything the agent holds: the socket and the Wi-Fi lock. */
+    /** Releases everything the agent holds: the socket, the network watch, the Wi-Fi lock. */
     override fun onDestroy() {
         server?.stop()
         stopWatchingForAddressChanges()

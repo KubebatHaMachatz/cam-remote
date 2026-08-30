@@ -21,10 +21,10 @@ import com.camremote.core.protocol.Params
 object CameraAppLaunch {
 
     /** "Open a camera app ready to take a still." The most semantically correct choice. */
-    const val STILL_IMAGE_CAMERA_ACTION = "android.media.action.STILL_IMAGE_CAMERA"
+    private const val STILL_IMAGE_CAMERA_ACTION = "android.media.action.STILL_IMAGE_CAMERA"
 
     /** "Take a picture and hand it back." Widely declared, but see the ordering note below. */
-    const val IMAGE_CAPTURE_ACTION = "android.media.action.IMAGE_CAPTURE"
+    private const val IMAGE_CAPTURE_ACTION = "android.media.action.IMAGE_CAPTURE"
 
     private const val MAIN_ACTION = "android.intent.action.MAIN"
     private const val CATEGORY_APP_CAMERA = "android.intent.category.APP_CAMERA"

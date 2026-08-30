@@ -86,7 +86,7 @@ class AppContainer private constructor(private val context: Context) {
         )
     }
 
-    /** How this handset identifies itself to a client, for discovery output and reports. */
+    /** How this handset identifies itself, in `/v1/health` and in `system.status`. */
     fun deviceDescription(): DeviceDescription = DeviceDescription(
         name = Build.DEVICE ?: "android",
         model = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
@@ -95,18 +95,18 @@ class AppContainer private constructor(private val context: Context) {
     )
 
     /**
-     * Builds the dispatcher for a running service.
-     *
-     * It takes a [LifecycleOwner] because CameraX binds its use cases to one, and the service is
-     * the only thing in a UI-less app with a lifecycle worth binding to.
-     */
-    /**
      * Every command and its outcome, in logcat.
      *
      * Held here rather than built per dispatcher so the whole process narrates under one tag.
      */
     private val commandLog by lazy { LogcatCommandLog() }
 
+    /**
+     * Builds the dispatcher for a running service.
+     *
+     * It takes a [LifecycleOwner] because CameraX binds its use cases to one, and the service is
+     * the only thing in a UI-less app with a lifecycle worth binding to.
+     */
     fun dispatcherFor(lifecycleOwner: LifecycleOwner): CommandDispatcher {
         val camera = CameraXController(context, lifecycleOwner)
         lateinit var registry: CommandRegistry

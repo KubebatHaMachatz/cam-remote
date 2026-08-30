@@ -53,7 +53,6 @@ data class ResolvedActivity(
 sealed interface ExtraValue {
     data class IntValue(val value: Int) : ExtraValue
     data class BoolValue(val value: Boolean) : ExtraValue
-    data class TextValue(val value: String) : ExtraValue
 }
 
 /** Launches activities on the device. */

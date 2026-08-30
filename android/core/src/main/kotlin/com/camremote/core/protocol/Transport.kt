@@ -7,8 +7,8 @@ import kotlinx.serialization.Serializable
 /**
  * Identity of the handset, as reported to clients.
  *
- * Kept deliberately thin: it is enough for a human to tell two phones apart in `camremote discover`
- * output, and no more. Anything richer is available through `device.getprop`.
+ * Kept deliberately thin: enough for a human reading `system.status` to tell two phones apart on a
+ * bench, and no more. Anything richer is available through `device.getprop`.
  */
 @Serializable
 data class DeviceDescription(

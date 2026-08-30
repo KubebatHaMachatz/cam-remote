@@ -59,7 +59,6 @@ class IntentActivityStarter(private val context: Context) : ActivityStarter {
             when (value) {
                 is ExtraValue.IntValue -> intent.putExtra(key, value.value)
                 is ExtraValue.BoolValue -> intent.putExtra(key, value.value)
-                is ExtraValue.TextValue -> intent.putExtra(key, value.value)
             }
         }
     }
