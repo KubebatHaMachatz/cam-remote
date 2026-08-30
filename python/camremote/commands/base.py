@@ -10,12 +10,9 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import dataclass
-from pathlib import Path
-from typing import Any, Callable, Mapping, Sequence, TextIO
+from typing import Any, Callable, Mapping, TextIO
 
 from camremote.client import RemoteClient
-from camremote.config import AgentConfig
-from camremote.discovery.mdns import DiscoveredAgent
 
 
 @dataclass
@@ -23,20 +20,10 @@ class Context:
     """Everything a CLI command is allowed to touch."""
 
     args: argparse.Namespace
-    client: RemoteClient | None
+    agent: RemoteClient
     out: TextIO
     err: TextIO
     as_json: bool
-    resolved: AgentConfig
-    config_path: Path
-    discover: Callable[[float], Sequence[DiscoveredAgent]]
-
-    @property
-    def agent(self) -> RemoteClient:
-        """The connected client. Only commands with `needs_agent` may reach for this."""
-        if self.client is None:
-            raise RuntimeError("This command does not have an agent connection")
-        return self.client
 
     def emit(self, payload: Mapping[str, Any] | None, *lines: str) -> None:
         """Prints either the raw payload or the human-readable lines, never both.
@@ -59,12 +46,11 @@ class Context:
 class CliCommand:
     """One subcommand.
 
-    :param needs_agent: false for commands that find an agent rather than talk to one, so they are
-        not blocked by the very configuration they exist to establish.
+    Every verb talks to an agent, so there is no flag for one that does not: the address is a
+    required argument and the connection is made before any command runs.
     """
 
     name: str
     help: str
     run: Callable[[Context], int]
     add_arguments: Callable[[argparse.ArgumentParser], None] = lambda parser: None
-    needs_agent: bool = True

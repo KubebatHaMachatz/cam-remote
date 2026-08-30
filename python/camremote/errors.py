@@ -28,7 +28,3 @@ class CommandFailed(CamRemoteError):
         self.code = code
         self.message = message
         self.remediation = remediation
-
-
-class NoAgentFound(CamRemoteError):
-    """Discovery ran and turned up nothing."""

@@ -10,8 +10,7 @@ import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
-from camremote import cli, config
-from camremote.discovery.mdns import DiscoveredAgent
+from camremote import cli
 from camremote.errors import CommandFailed, TransportError
 from camremote.models import CommandResponse
 
@@ -55,25 +54,81 @@ class FakeClient:
 
 
 class CliTestCase(unittest.TestCase):
-    """Shared setup: captured output streams and a config file in a temporary directory."""
+    """Shared setup: captured output streams, and an address every command now requires."""
+
+    HOST = "10.0.0.4"
 
     def setUp(self):
         self.out = io.StringIO()
         self.err = io.StringIO()
-        self.directory = TemporaryDirectory()
-        self.config_path = Path(self.directory.name) / "camremote.toml"
-        config.save(config.AgentConfig(host="10.0.0.4", port=8099), self.config_path)
-        self.addCleanup(self.directory.cleanup)
+        self.connected: list[tuple[str, int]] = []
 
-    def run_cli(self, *argv, client=None, agents=None):
-        return cli.main(
-            list(argv),
-            connect=lambda agent: client or FakeClient(),
-            discover=lambda timeout: agents if agents is not None else [],
-            config_path=self.config_path,
-            out=self.out,
-            err=self.err,
-        )
+    def run_cli(self, *argv, client=None, host=HOST):
+        """Runs the CLI, supplying --host unless a test is checking the argument itself."""
+        argv = list(argv)
+        if host is not None:
+            argv = ["--host", host, *argv]
+
+        def connect(address, port):
+            self.connected.append((address, port))
+            return client or FakeClient()
+
+        return cli.main(argv, connect=connect, out=self.out, err=self.err)
+
+
+class AddressTest(CliTestCase):
+    """The agent's address is the one thing every command needs, and it is now always supplied."""
+
+    def test_the_address_is_required(self):
+        # Without discovery there is nothing to fall back on, so this has to be a usage error
+        # rather than an attempt to reach some default.
+        code = self.run_cli("system-ping", host=None)
+
+        self.assertEqual(2, code)
+        self.assertIn("--host", self.err.getvalue())
+
+    def test_uses_the_default_port_when_the_address_carries_none(self):
+        self.run_cli("system-ping", host="10.0.0.8")
+
+        self.assertEqual([("10.0.0.8", 8099)], self.connected)
+
+    def test_accepts_the_host_and_port_exactly_as_the_notification_shows_them(self):
+        # The device's notification reads "Accepting commands on 10.0.0.8:8099", so that whole
+        # string has to work without the operator taking it apart.
+        self.run_cli("system-ping", host="10.0.0.8:9000")
+
+        self.assertEqual([("10.0.0.8", 9000)], self.connected)
+
+    def test_an_explicit_port_flag_is_honoured(self):
+        self.run_cli("--port", "9000", "system-ping", host="10.0.0.8")
+
+        self.assertEqual([("10.0.0.8", 9000)], self.connected)
+
+    def test_a_port_in_the_address_wins_over_the_flag(self):
+        self.run_cli("--port", "7000", "system-ping", host="10.0.0.8:9000")
+
+        self.assertEqual([("10.0.0.8", 9000)], self.connected)
+
+    def test_a_non_numeric_port_in_the_address_is_reported(self):
+        code = self.run_cli("system-ping", host="10.0.0.8:eight")
+
+        self.assertEqual(1, code)
+        self.assertIn("not a number", self.err.getvalue())
+
+    def test_a_port_outside_the_valid_range_is_reported(self):
+        for port in ("0", "65536"):
+            with self.subTest(port=port):
+                self.setUp()
+                code = self.run_cli("system-ping", host=f"10.0.0.8:{port}")
+
+                self.assertEqual(1, code)
+                self.assertIn("between 1 and 65535", self.err.getvalue())
+
+    def test_a_blank_address_is_reported(self):
+        code = self.run_cli("system-ping", host="   ")
+
+        self.assertEqual(1, code)
+        self.assertIn("--host", self.err.getvalue())
 
 
 class GetPropTest(CliTestCase):
@@ -139,31 +194,6 @@ class FailureTest(CliTestCase):
         # Distinct from 1 so a script can tell "the phone said no" from "the phone was not there".
         self.assertEqual(3, code)
         self.assertIn("Could not reach", self.err.getvalue())
-
-    def test_an_unreachable_agent_points_at_what_is_actually_on_the_network(self):
-        # The failure this exists to prevent: testing a second handset, the saved config still names
-        # the first, and the error says only "connection refused" while the new device sits there
-        # answering mDNS.
-        client = FakeClient(raises=TransportError("Could not reach the agent at 10.0.0.4:8099"))
-        agent = DiscoveredAgent(
-            instance="cam-remote SM-S921B",
-            host="10.0.0.8",
-            port=8099,
-            attributes={"model": "SM-S921B"},
-        )
-
-        code = self.run_cli("system-ping", client=client, agents=[agent])
-
-        self.assertEqual(3, code)
-        self.assertIn("10.0.0.8:8099", self.err.getvalue())
-        self.assertIn("--host", self.err.getvalue())
-
-    def test_does_not_invent_suggestions_when_the_network_is_empty(self):
-        client = FakeClient(raises=TransportError("Could not reach the agent at 10.0.0.4:8099"))
-
-        self.run_cli("system-ping", client=client, agents=[])
-
-        self.assertNotIn("Found these", self.err.getvalue())
 
     def test_an_unknown_subcommand_exits_two(self):
         self.assertEqual(2, self.run_cli("teleport"))
@@ -238,94 +268,6 @@ class CaptureTest(CliTestCase):
         self.run_cli("open-camera", "--lens", "rear", client=client)
 
         self.assertEqual([("camera.open", {"lens": "rear"})], client.calls)
-
-
-class DiscoveryTest(CliTestCase):
-    """Finding an agent when none has been configured."""
-
-    def test_lists_agents_it_finds(self):
-        agent = DiscoveredAgent(
-            instance="cam-remote realme RMX3563",
-            host="10.0.0.4",
-            port=8099,
-            attributes={"model": "realme RMX3563"},
-        )
-
-        code = self.run_cli("discover", agents=[agent])
-
-        self.assertEqual(0, code)
-        self.assertIn("10.0.0.4:8099", self.out.getvalue())
-
-    def test_says_so_when_the_network_yields_nothing(self):
-        code = self.run_cli("discover", agents=[])
-
-        self.assertEqual(3, code)
-        # Multicast is blocked on plenty of networks, so the failure has to point at the way out.
-        self.assertIn("--host", self.err.getvalue())
-
-    def test_falls_back_to_discovery_when_no_host_is_configured(self):
-        empty_config = Path(self.directory.name) / "empty.toml"
-        agent = DiscoveredAgent(instance="a", host="10.0.0.7", port=8099, attributes={})
-        seen = {}
-
-        def connect(resolved):
-            seen["host"] = resolved.host
-            return FakeClient({"system.ping": {"pong": True}})
-
-        code = cli.main(
-            ["system-ping"],
-            connect=connect,
-            discover=lambda timeout: [agent],
-            config_path=empty_config,
-            out=self.out,
-            err=self.err,
-        )
-
-        self.assertEqual(0, code)
-        self.assertEqual("10.0.0.7", seen["host"])
-
-
-class PairingTest(CliTestCase):
-    """Finding the agent and remembering its address -- no code, no handshake."""
-
-    def test_confirms_reachability_and_saves_the_address(self):
-        code = self.run_cli("pair", client=FakeClient())
-
-        self.assertEqual(0, code)
-        saved = config.load(self.config_path)
-        self.assertEqual("10.0.0.4", saved.host)
-        self.assertEqual(8099, saved.port)
-
-    def test_a_client_that_cannot_be_reached_fails_pairing(self):
-        client = FakeClient(raises=TransportError("Could not reach the agent at 10.0.0.4:8099"))
-
-        code = self.run_cli("pair", client=client)
-
-        self.assertEqual(3, code)
-
-    def test_records_the_agent_address_discovery_found(self):
-        agent = DiscoveredAgent(instance="a", host="10.0.0.7", port=8099, attributes={})
-        empty_config = Path(self.directory.name) / "empty.toml"
-
-        cli.main(
-            ["pair"],
-            connect=lambda resolved: FakeClient(),
-            discover=lambda timeout: [agent],
-            config_path=empty_config,
-            out=self.out,
-            err=self.err,
-        )
-
-        saved = config.load(empty_config)
-        self.assertEqual("10.0.0.7", saved.host)
-        self.assertEqual(8099, saved.port)
-
-    def test_names_the_device_found(self):
-        client = FakeClient(health={"service": "cam-remote", "device": {"model": "SM-S921B"}})
-
-        self.run_cli("pair", client=client)
-
-        self.assertIn("SM-S921B", self.out.getvalue())
 
 
 class CatalogTest(CliTestCase):
