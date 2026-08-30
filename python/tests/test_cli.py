@@ -82,35 +82,35 @@ class AddressTest(CliTestCase):
     def test_the_address_is_required(self):
         # Without discovery there is nothing to fall back on, so this has to be a usage error
         # rather than an attempt to reach some default.
-        code = self.run_cli("system-ping", host=None)
+        code = self.run_cli("status", host=None)
 
         self.assertEqual(2, code)
         self.assertIn("--host", self.err.getvalue())
 
     def test_uses_the_default_port_when_the_address_carries_none(self):
-        self.run_cli("system-ping", host="10.0.0.8")
+        self.run_cli("status", host="10.0.0.8")
 
         self.assertEqual([("10.0.0.8", 8099)], self.connected)
 
     def test_accepts_the_host_and_port_exactly_as_the_notification_shows_them(self):
         # The device's notification reads "Accepting commands on 10.0.0.8:8099", so that whole
         # string has to work without the operator taking it apart.
-        self.run_cli("system-ping", host="10.0.0.8:9000")
+        self.run_cli("status", host="10.0.0.8:9000")
 
         self.assertEqual([("10.0.0.8", 9000)], self.connected)
 
     def test_an_explicit_port_flag_is_honoured(self):
-        self.run_cli("--port", "9000", "system-ping", host="10.0.0.8")
+        self.run_cli("--port", "9000", "status", host="10.0.0.8")
 
         self.assertEqual([("10.0.0.8", 9000)], self.connected)
 
     def test_a_port_in_the_address_wins_over_the_flag(self):
-        self.run_cli("--port", "7000", "system-ping", host="10.0.0.8:9000")
+        self.run_cli("--port", "7000", "status", host="10.0.0.8:9000")
 
         self.assertEqual([("10.0.0.8", 9000)], self.connected)
 
     def test_a_non_numeric_port_in_the_address_is_reported(self):
-        code = self.run_cli("system-ping", host="10.0.0.8:eight")
+        code = self.run_cli("status", host="10.0.0.8:eight")
 
         self.assertEqual(1, code)
         self.assertIn("not a number", self.err.getvalue())
@@ -119,13 +119,13 @@ class AddressTest(CliTestCase):
         for port in ("0", "65536"):
             with self.subTest(port=port):
                 self.setUp()
-                code = self.run_cli("system-ping", host=f"10.0.0.8:{port}")
+                code = self.run_cli("status", host=f"10.0.0.8:{port}")
 
                 self.assertEqual(1, code)
                 self.assertIn("between 1 and 65535", self.err.getvalue())
 
     def test_a_blank_address_is_reported(self):
-        code = self.run_cli("system-ping", host="   ")
+        code = self.run_cli("status", host="   ")
 
         self.assertEqual(1, code)
         self.assertIn("--host", self.err.getvalue())
@@ -189,7 +189,7 @@ class FailureTest(CliTestCase):
     def test_an_unreachable_agent_exits_three(self):
         client = FakeClient(raises=TransportError("Could not reach the agent at 10.0.0.4:8099"))
 
-        code = self.run_cli("system-ping", client=client)
+        code = self.run_cli("status", client=client)
 
         # Distinct from 1 so a script can tell "the phone said no" from "the phone was not there".
         self.assertEqual(3, code)
@@ -301,7 +301,9 @@ class CatalogTest(CliTestCase):
         self.assertIn("device.getprop", self.out.getvalue())
         self.assertIn("key", self.out.getvalue())
 
-    def _status_client(self, permissions, complete=False, missing=()):
+    def _status_client(self, permissions, complete=False, missing=(), device_time=None):
+        import time
+
         return FakeClient(
             {
                 "system.status": {
@@ -310,9 +312,45 @@ class CatalogTest(CliTestCase):
                     "setupComplete": complete,
                     "missing": list(missing),
                     "hasRearCamera": True,
+                    "deviceTimeMillis": (
+                        int(time.time() * 1000) if device_time is None else device_time
+                    ),
                 }
             }
         )
+
+    def test_reports_the_round_trip_and_the_device_clock(self):
+        # These were system-ping's whole output. A separate verb to learn them was one command too
+        # many, and status is what an operator runs first anyway.
+        client = self._status_client({"camera": True}, complete=True)
+
+        self.run_cli("status", client=client)
+        printed = self.out.getvalue()
+
+        self.assertIn("ms", printed)
+        self.assertIn("clock", printed)
+
+    def test_says_the_clock_is_in_step_when_it_agrees_with_this_machine(self):
+        client = self._status_client({"camera": True}, complete=True)
+
+        self.run_cli("status", client=client)
+
+        self.assertIn("in step", self.out.getvalue())
+
+    def test_flags_a_device_clock_that_disagrees_with_this_machine(self):
+        # A handset whose clock is wrong writes capture timestamps that make no sense later, and
+        # this is the cheapest place to notice.
+        import time
+
+        client = self._status_client(
+            {"camera": True}, complete=True, device_time=int(time.time() * 1000) - 3_600_000
+        )
+
+        self.run_cli("status", client=client)
+        printed = self.out.getvalue()
+
+        self.assertIn("behind", printed)
+        self.assertNotIn("in step", printed)
 
     def test_lists_every_permission_and_whether_it_is_granted(self):
         # The whole point of asking a phone in another room: not just what is wrong, but what the

@@ -16,10 +16,10 @@ class ProtocolJsonTest {
 
     @Test
     fun `decodes a minimal request`() {
-        val request = ProtocolJson.decodeRequest("""{"id":"r1","command":"system.ping"}""")
+        val request = ProtocolJson.decodeRequest("""{"id":"r1","command":"system.status"}""")
 
         assertEquals("r1", request.id)
-        assertEquals("system.ping", request.command)
+        assertEquals("system.status", request.command)
         assertEquals(Params.EMPTY, request.params)
     }
 
@@ -36,7 +36,7 @@ class ProtocolJsonTest {
     @Test
     fun `tolerates unknown fields so an older agent survives a newer client`() {
         val request = ProtocolJson.decodeRequest(
-            """{"id":"r3","command":"system.ping","futureField":true}""",
+            """{"id":"r3","command":"system.status","futureField":true}""",
         )
 
         assertEquals("r3", request.id)

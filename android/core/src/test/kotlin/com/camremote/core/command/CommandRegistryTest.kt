@@ -16,15 +16,15 @@ class CommandRegistryTest {
 
     @Test
     fun `finds a registered command by name`() {
-        val command = TestCommand(name = "system.ping") { Success(null) }
+        val command = TestCommand(name = "system.status") { Success(null) }
         val registry = CommandRegistry(listOf(command))
 
-        assertEquals(command, registry["system.ping"])
+        assertEquals(command, registry["system.status"])
     }
 
     @Test
     fun `returns null for an unregistered name`() {
-        val registry = CommandRegistry(listOf(TestCommand(name = "system.ping") { Success(null) }))
+        val registry = CommandRegistry(listOf(TestCommand(name = "system.status") { Success(null) }))
 
         assertNull(registry["camera.open"])
     }
@@ -36,27 +36,27 @@ class CommandRegistryTest {
         val error = assertFailsWith<IllegalArgumentException> {
             CommandRegistry(
                 listOf(
-                    TestCommand(name = "system.ping") { Success(null) },
-                    TestCommand(name = "system.ping") { Success(null) },
+                    TestCommand(name = "system.status") { Success(null) },
+                    TestCommand(name = "system.status") { Success(null) },
                 ),
             )
         }
 
-        assertEquals(true, error.message?.contains("system.ping"))
+        assertEquals(true, error.message?.contains("system.status"))
     }
 
     @Test
     fun `exposes descriptors sorted by name for a stable catalog`() {
         val registry = CommandRegistry(
             listOf(
-                TestCommand(name = "system.ping") { Success(null) },
+                TestCommand(name = "system.status") { Success(null) },
                 TestCommand(name = "camera.open") { Success(null) },
                 TestCommand(name = "device.getprop") { Success(null) },
             ),
         )
 
         assertEquals(
-            listOf("camera.open", "device.getprop", "system.ping"),
+            listOf("camera.open", "device.getprop", "system.status"),
             registry.descriptors().map { it.name },
         )
     }

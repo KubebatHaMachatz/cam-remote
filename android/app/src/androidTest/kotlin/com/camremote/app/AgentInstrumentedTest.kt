@@ -87,12 +87,15 @@ class AgentInstrumentedTest {
     }
 
     @Test
-    fun agentAnswersPingThroughTheRealDispatcher() = runBlocking {
+    fun agentAnswersThroughTheRealDispatcher() = runBlocking {
         val response = container.dispatcherFor(lifecycle)
-            .dispatch(CommandRequest(id = "t1", command = "system.ping"))
+            .dispatch(CommandRequest(id = "t1", command = "system.status"))
 
         assertEquals(CommandStatus.OK, response.status)
-        assertEquals(true, response.data?.get("pong")?.jsonPrimitive?.content?.toBoolean())
+        // The device's own clock, which only a real device can supply -- and the reason this
+        // command absorbed the old system.ping.
+        val deviceTime = response.data?.get("deviceTimeMillis")?.jsonPrimitive?.content?.toLong()
+        assertTrue("status should report the device clock", (deviceTime ?: 0) > 0)
     }
 
     @Test
@@ -219,7 +222,7 @@ class AgentInstrumentedTest {
         server.start()
 
         try {
-            val (status, body) = post(port, """{"id":"t4","command":"system.ping"}""")
+            val (status, body) = post(port, """{"id":"t4","command":"system.status"}""")
 
             assertEquals(200, status)
             assertEquals(CommandStatus.OK, ProtocolJson.decodeResponse(body).status)

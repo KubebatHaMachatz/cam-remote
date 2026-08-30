@@ -54,11 +54,11 @@ class CommandDispatcherTest {
     @Test
     fun `records every command it is given, before running it`() = runTest {
         val log = RecordingLog()
-        val dispatcher = loggingDispatcher(log, TestCommand(name = "system.ping") { Success(null) })
+        val dispatcher = loggingDispatcher(log, TestCommand(name = "system.status") { Success(null) })
 
-        dispatcher.dispatch(CommandRequest(id = "r1", command = "system.ping"))
+        dispatcher.dispatch(CommandRequest(id = "r1", command = "system.status"))
 
-        assertEquals(listOf("system.ping"), log.received)
+        assertEquals(listOf("system.status"), log.received)
     }
 
     @Test
@@ -66,12 +66,12 @@ class CommandDispatcherTest {
         val log = RecordingLog()
         val dispatcher = loggingDispatcher(
             log,
-            TestCommand(name = "system.ping") {
+            TestCommand(name = "system.status") {
                 Success(buildJsonObject { put("pong", JsonPrimitive(true)) })
             },
         )
 
-        dispatcher.dispatch(CommandRequest(id = "r1", command = "system.ping"))
+        dispatcher.dispatch(CommandRequest(id = "r1", command = "system.status"))
 
         val recorded = log.completed.single()
         assertEquals(CommandStatus.OK, recorded.status)
@@ -114,16 +114,16 @@ class CommandDispatcherTest {
     @Test
     fun `returns the command payload and echoes the correlation id`() = runTest {
         val dispatcher = dispatcher(
-            TestCommand(name = "system.ping") {
+            TestCommand(name = "system.status") {
                 clock.advance(7)
                 Success(buildJsonObject { put("pong", JsonPrimitive(true)) })
             },
         )
 
-        val response = dispatcher.dispatch(CommandRequest(id = "abc", command = "system.ping"))
+        val response = dispatcher.dispatch(CommandRequest(id = "abc", command = "system.status"))
 
         assertEquals("abc", response.id)
-        assertEquals("system.ping", response.command)
+        assertEquals("system.status", response.command)
         assertEquals(CommandStatus.OK, response.status)
         assertEquals(JsonPrimitive(true), response.data?.get("pong"))
         assertEquals(7, response.durationMs)
@@ -132,7 +132,7 @@ class CommandDispatcherTest {
 
     @Test
     fun `reports an unregistered command rather than failing the transport`() = runTest {
-        val dispatcher = dispatcher(TestCommand(name = "system.ping") { Success(null) })
+        val dispatcher = dispatcher(TestCommand(name = "system.status") { Success(null) })
 
         val response = dispatcher.dispatch(CommandRequest(id = "abc", command = "camera.teleport"))
 

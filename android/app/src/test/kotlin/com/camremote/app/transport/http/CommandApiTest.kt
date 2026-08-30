@@ -74,7 +74,7 @@ class CommandApiTest {
     fun `runs a command and returns the envelope`() = testApplication {
         application(
             api(
-                TestCommand(name = "system.ping") {
+                TestCommand(name = "system.status") {
                     CommandOutcome.Success(buildJsonObject { put("pong", JsonPrimitive(true)) })
                 },
             ),
@@ -82,7 +82,7 @@ class CommandApiTest {
 
         val response = client.post("/v1/command") {
             contentType(ContentType.Application.Json)
-            setBody("""{"id":"req-1","command":"system.ping"}""")
+            setBody("""{"id":"req-1","command":"system.status"}""")
         }
 
         assertEquals(HttpStatusCode.OK, response.status)
@@ -108,10 +108,10 @@ class CommandApiTest {
 
     @Test
     fun `runs a command with no credential of any kind`() = testApplication {
-        application(api(TestCommand(name = "system.ping") { CommandOutcome.Success(null) }))
+        application(api(TestCommand(name = "system.status") { CommandOutcome.Success(null) }))
 
         val response = client.post("/v1/command") {
-            setBody("""{"id":"req-3","command":"system.ping"}""")
+            setBody("""{"id":"req-3","command":"system.status"}""")
         }
 
         // No pairing code, no token -- the project assumes one agent and one client on the LAN.
@@ -155,10 +155,10 @@ class CommandApiTest {
 
     @Test
     fun `always replies as json`() = testApplication {
-        application(api(TestCommand(name = "system.ping") { CommandOutcome.Success(null) }))
+        application(api(TestCommand(name = "system.status") { CommandOutcome.Success(null) }))
 
         val response = client.post("/v1/command") {
-            setBody("""{"id":"req-4","command":"system.ping"}""")
+            setBody("""{"id":"req-4","command":"system.status"}""")
         }
 
         assertEquals(ContentType.Application.Json, response.contentType()?.withoutParameters())
