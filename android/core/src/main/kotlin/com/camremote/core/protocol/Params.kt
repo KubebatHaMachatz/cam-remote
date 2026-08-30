@@ -6,6 +6,7 @@ import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -24,8 +25,22 @@ class Params(val raw: JsonObject) {
 
     val keys: Set<String> get() = raw.keys
 
-    /** Returns the value of [key] as a string, or null when absent. */
-    fun optString(key: String): String? = primitive(key)?.content
+    /**
+     * Returns the value of [key] as a string, or null when absent.
+     *
+     * A number or a boolean is refused rather than converted. `JsonPrimitive.content` yields the
+     * source text of any scalar, so without this check `{"filename": true}` would name a file
+     * `true.jpg` and the typed protocol would be typed in name only.
+     */
+    fun optString(key: String): String? {
+        val primitive = primitive(key) ?: return null
+        if (!primitive.isString) {
+            throw InvalidParamsException(
+                "Parameter '$key' must be a string, got ${primitive.content}",
+            )
+        }
+        return primitive.content
+    }
 
     /** Returns the value of [key] as a string, or throws when absent or blank. */
     fun requireString(key: String): String {
@@ -38,6 +53,11 @@ class Params(val raw: JsonObject) {
     /** Returns the value of [key] as an int, or [default] when absent. Throws if present but not an int. */
     fun optInt(key: String, default: Int): Int {
         val primitive = primitive(key) ?: return default
+        // Strict in this direction too: enforcing the contract only for strings would leave it
+        // meaning nothing in particular.
+        if (primitive.isString) {
+            throw InvalidParamsException("Parameter '$key' must be a number, not a quoted string")
+        }
         return primitive.intOrNull
             ?: throw InvalidParamsException("Parameter '$key' must be an integer")
     }
@@ -45,6 +65,9 @@ class Params(val raw: JsonObject) {
     /** Returns the value of [key] as a boolean, or [default] when absent. Throws if present but not a boolean. */
     fun optBoolean(key: String, default: Boolean): Boolean {
         val primitive = primitive(key) ?: return default
+        if (primitive.isString) {
+            throw InvalidParamsException("Parameter '$key' must be a boolean, not a quoted string")
+        }
         return primitive.booleanOrNull
             ?: throw InvalidParamsException("Parameter '$key' must be a boolean")
     }
@@ -54,9 +77,12 @@ class Params(val raw: JsonObject) {
         val element = raw[key] ?: return null
         val array = element as? JsonArray
             ?: throw InvalidParamsException("Parameter '$key' must be an array of strings")
-        return array.map {
-            (it as? JsonPrimitive)?.content
-                ?: throw InvalidParamsException("Parameter '$key' must contain only strings")
+        return array.map { element ->
+            val primitive = element as? JsonPrimitive
+            if (primitive == null || !primitive.isString) {
+                throw InvalidParamsException("Parameter '$key' must contain only strings")
+            }
+            primitive.content
         }
     }
 
@@ -64,10 +90,13 @@ class Params(val raw: JsonObject) {
      * The scalar at [key], or null when absent.
      *
      * Rejects objects and arrays here so every accessor above gets the same error for the same
-     * mistake, rather than each discovering it differently.
+     * mistake, rather than each discovering it differently. An explicit JSON null reads as absent:
+     * `JsonNull` is itself a `JsonPrimitive` whose content is the text "null", so leaving it to the
+     * accessors would turn `{"filename": null}` into the file `null.jpg`.
      */
     private fun primitive(key: String): JsonPrimitive? {
         val element = raw[key] ?: return null
+        if (element is JsonNull) return null
         return element as? JsonPrimitive
             ?: throw InvalidParamsException("Parameter '$key' must be a scalar value")
     }

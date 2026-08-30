@@ -23,6 +23,7 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
 
 /**
  * The assignment's rear-camera requirement, specified against fakes.
@@ -269,15 +270,18 @@ class CapturePhotoCommandTest {
         assertEquals(95, defaulted.request?.jpegQuality)
 
         val overridden = FakeCamera()
-        command(camera = overridden).execute(Params.of("jpegQuality" to "60"))
+        command(camera = overridden)
+            .execute(Params(buildJsonObject { put("jpegQuality", JsonPrimitive(60)) }))
         assertEquals(60, overridden.request?.jpegQuality)
     }
 
     @Test
     fun `rejects a jpeg quality outside the valid range`() = runTest {
+        // Passed as real JSON numbers, so this fails on the range rather than on the type -- a
+        // quoted "0" would now be refused for being quoted and the range would go untested.
         listOf(0, 101, -5).forEach { quality ->
             assertFailsWith<InvalidParamsException>("expected quality $quality to be rejected") {
-                command().execute(Params.of("jpegQuality" to quality.toString()))
+                command().execute(Params(buildJsonObject { put("jpegQuality", JsonPrimitive(quality)) }))
             }
         }
     }
