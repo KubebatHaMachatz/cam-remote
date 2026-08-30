@@ -361,8 +361,8 @@ capability is a `test:` commit followed by a `feat:` commit.
 TDD only works on code that runs in milliseconds without a device — which is exactly what the
 hexagon delivers. All the decision-making lives in `:core` with no Android imports: target
 resolution, precondition checks, path validation, key sanitising, error mapping, filename
-generation, address ranking. Every port has a fake. That is 173 tests in `:core` that run in about a
-second, plus 10 in `:app` for the transport routes, and 55 for the Python client.
+generation, address ranking. Every port has a fake. That is 177 tests in `:core` that run in about a
+second, plus 10 in `:app` for the transport routes, and 57 for the Python client.
 
 The adapters left over are three-to-ten-line pass-throughs with no branching. `CameraAppLaunch` is
 the clearest case: a pure function produces a `LaunchSpec` — tested against the no-camera-app and

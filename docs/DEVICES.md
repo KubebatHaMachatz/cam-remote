@@ -262,7 +262,7 @@ Start with one command, which gathers everything and keeps going even when part 
 broken:
 
 ```bash
-camremote --host <ip> device-report --out matrix/samsung-s24.json
+camremote --host <ip> status --out matrix/samsung-s24.json
 ```
 
 It reports the device and build, every permission that is missing, every camera app present and
@@ -342,7 +342,7 @@ described above and no amount of client-side work will fix it.
 
 Worth recording, because it is the sort of thing that is expensive to rediscover:
 
-Run `camremote --host <ip> device-report --out matrix/<device>.json` on each new handset and add a row:
+Run `camremote --host <ip> status --out matrix/<device>.json` on each new handset and add a row:
 
 | Device | Android | Camera package | Strategy that worked | Capture | Notes |
 |---|---|---|---|---|---|

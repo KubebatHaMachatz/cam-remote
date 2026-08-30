@@ -147,9 +147,9 @@ Useful when deciding where a change belongs:
 
 | Suite | Count | Runs where |
 |---|---|---|
-| `:core` unit tests | 173 | Desktop JVM, no Android, about a second |
+| `:core` unit tests | 177 | Desktop JVM, no Android, about a second |
 | `:app` unit tests | 10 | Desktop JVM — the Ktor routes |
-| Python unit tests | 55 | Desktop, standard library only |
+| Python unit tests | 57 | Desktop, standard library only |
 | Instrumented | 7 | A real handset: real sensor, real MediaStore, real socket |
 
 The `:app` count fell by ten when captures moved to MediaStore, and that is the boundary working

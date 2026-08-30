@@ -92,11 +92,12 @@ does, so it is worth re-reading the shade rather than trusting a value from yest
 ./scripts/camremote --host 10.0.0.4 status
 ```
 
-**Expected output (fully set up):**
+**Expected output (fully set up):** four sections, gathered in four requests.
 
 ```
 realme RMX3563 (Android 14, API 34)
 Rear camera: yes
+Answered in 8 ms; device clock 2026-08-30 18:40:30 (in step with this machine)
 
 Permissions:
   camera                        granted
@@ -104,14 +105,34 @@ Permissions:
   canDrawOverlays               granted
   ignoringBatteryOptimizations  granted
 
+Camera apps
+  camera.open would use: still_image_camera → com.oplus.camera/.Camera
+  still_image_camera (android.media.action.STILL_IMAGE_CAMERA): 1 handler(s)
+      com.oplus.camera/.Camera  [preinstalled, default handler]
+  app_camera_category (android.intent.action.MAIN): 1 handler(s)
+      com.oplus.camera/.Camera  [preinstalled]
+  image_capture (android.media.action.IMAGE_CAPTURE): 1 handler(s)
+      com.oplus.camera/.Camera  [preinstalled, default handler]
+
+Build
+  ro.product.manufacturer         = realme
+  ro.product.model                = RMX3563
+  ro.build.version.release        = 14
+  ro.build.version.sdk            = 34
+  ro.build.version.security_patch = 2024-03-01
+  …ten more…
+
+Commands (6): camera.apps, camera.capture, camera.open, device.getprop, system.commands, system.status
+
 Setup complete: every command is available.
 ```
 
-**Expected output (missing a grant):**
+**Expected output (missing a grant):** identical but for the permission block and the last line.
 
 ```
 samsung SM-S921B (Android 14, API 34)
 Rear camera: yes
+Answered in 9 ms; device clock 2026-08-30 18:15:25 (in step with this machine)
 
 Permissions:
   camera                        granted
@@ -119,18 +140,11 @@ Permissions:
   canDrawOverlays               MISSING  - blocks open-camera, which starts an app from the background
   ignoringBatteryOptimizations  granted
 
+…camera apps, build and catalog as above…
+
 Setup incomplete. Missing on the device: canDrawOverlays
 Open cam-remote on the handset and grant the items listed above.
 ```
-
-Every permission the agent knows about is listed either way, granted or not, so this answers "is the
-device ready" and "what exactly is it missing" in one round trip. A missing one is annotated with
-what it costs, because the useful half of a denied grant is which command has just become
-impossible.
-
-The list comes from the agent rather than from a table in the client, so a permission a newer agent
-reports and this client has never heard of is still shown — by name, without a note. That is the
-same arrangement as `commands`: the device is the authority on its own capabilities.
 
 **How to verify:** the model and Android version should match the physical device in front of you.
 Run this first after any setup change — it is the fastest way to confirm a permission grant actually
@@ -142,6 +156,24 @@ the handset against this machine and says only that the two disagree, never whic
 handset an hour out writes capture timestamps that make no sense a week later, and this is the
 cheapest place to notice. Anything within five seconds reads as *in step*, because below that the
 difference cannot be told from the round trip that measured it.
+
+**The whole survey, for a device matrix.** `status` runs four requests — its own readiness, the
+camera-app breakdown, fourteen build properties and the command catalog — and prints them as one
+sectioned summary. `--out` writes the same thing as JSON:
+
+```bash
+./scripts/camremote --host 10.0.0.4 status --out matrix/my-device.json
+cat matrix/my-device.json | python3 -m json.tool | head -30
+```
+
+That file has `status`, `cameraApps`, `properties` and `commands` at the top level, which is what
+goes in the matrix in `docs/DEVICES.md`. `--json` prints the same blob to stdout instead.
+
+**It keeps going when the device does not.** A section that fails is recorded in place as an
+`"error"` object rather than ending the run — if `camera.apps` fails because the camera permission
+is missing, the rest still reports, and the failure is part of the answer. A diagnostic that only
+works on a healthy device is no diagnostic, and a half-configured device is exactly when this gets
+run.
 
 ```bash
 ./scripts/camremote --host 10.0.0.4 --json status
@@ -423,42 +455,7 @@ home button) and retry — it should now succeed in a couple of seconds.
 
 ---
 
-## 8. `device-report` — everything about a device in one go
-
-```bash
-./scripts/camremote --host 10.0.0.4 device-report --out matrix/my-device.json
-```
-
-**Expected output:** a longer, sectioned summary — device model and Android version, rear-camera
-availability, setup completeness, the full camera-app breakdown (same content as `camera-apps`), the
-surveyed build properties, and the command catalog — followed by:
-
-```
-Full report written to matrix/my-device.json
-```
-
-**How to verify:**
-
-```bash
-cat matrix/my-device.json | python3 -m json.tool | head -30
-```
-
-should show a well-formed JSON document with `agent`, `status`, `cameraApps`, `properties`, and
-`commands` top-level keys. This command is the fastest single check when testing a **new** device for
-the first time — it runs four underlying commands in sequence and keeps going even if one of them
-fails (each failure is recorded inline as an `"error"` object in that section, rather than aborting
-the whole report), so it is useful even on a half-configured device.
-
-Run it with `--json` for the raw combined blob on stdout instead of (or in addition to) writing a
-file:
-
-```bash
-./scripts/camremote --host 10.0.0.4 --json device-report
-```
-
----
-
-## 9. Watching what the device did
+## 8. Watching what the device did
 
 Everything so far reads the agent's answer. This reads the agent's own account, which is the other
 half — and the half that is still there tomorrow.
@@ -492,7 +489,7 @@ product: nothing about controlling the agent requires a cable.
 
 ---
 
-## 10. Verifying failure paths deliberately
+## 9. Verifying failure paths deliberately
 
 A command that only ever succeeds hasn't been tested. These are worth running once to confirm the
 agent's error-reporting behaves as documented, not just its happy path.

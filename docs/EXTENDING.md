@@ -114,7 +114,7 @@ and one line in `python/camremote/commands/__init__.py`:
 ```python
 COMMANDS = (
     STATUS, LIST_COMMANDS, GETPROP,
-    OPEN_CAMERA, CAMERA_APPS, TAKE_PICTURE, DEVICE_REPORT, REBOOT,
+    OPEN_CAMERA, CAMERA_APPS, TAKE_PICTURE, REBOOT,
 )
 ```
 

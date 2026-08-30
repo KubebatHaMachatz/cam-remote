@@ -32,8 +32,9 @@ agent shows in its own notification; nothing had to be paired, saved or discover
 | 3. Fetch device property data | `camremote getprop KEY...` | Reads any number of properties in one round trip |
 | 4. Control application | `camremote` | Pure standard library; nothing to install |
 
-Plus `status`, `commands`, `camera-apps` and `device-report` for inspecting and surveying an
-agent.
+Plus `status`, `commands` and `camera-apps` for inspecting an agent. `status` is the one to reach
+for first: it surveys the whole device — permissions, camera apps, build properties and the
+catalog — and `--out` writes the lot as JSON for a compatibility matrix.
 
 ## No adb, no UI, no pairing code
 
@@ -145,7 +146,8 @@ command if you prefer.
 Every one of these needs `--host`; it is left out below only so the lines stay readable.
 
 ```bash
-camremote status                        # device, permissions, readiness
+camremote status                        # the whole survey: permissions, camera apps, build, catalog
+camremote status --out d.json           # the same, also written as JSON for a device matrix
 camremote commands                      # the catalog, straight from the device
 camremote getprop ro.product.model      # one property, or several at once
 camremote open-camera                   # open the camera app
@@ -154,7 +156,6 @@ camremote take-picture --out ./shots    # capture and download
 camremote take-picture --filename door --quality 80 --path reports
 camremote take-picture --no-download    # leave it on the device
 camremote camera-apps                   # every camera app, and which one open-camera would use
-camremote device-report --out d.json    # everything about a device, for a compatibility matrix
 ```
 
 So a real invocation is `camremote --host 10.0.0.4 status`, and `--host` accepts the `ip:port` form
@@ -171,14 +172,14 @@ Exit codes, for scripting:
 | 3 | No agent could be reached |
 
 `scripts/demo.sh` walks through the three assignment features in the order it lists them, either
-side of `status` and `commands`. The two diagnostics, `camera-apps` and `device-report`, are not in
-it; `docs/DEVICES.md` covers those.
+side of `status` and `commands`. The remaining diagnostic, `camera-apps`, is not in it;
+`docs/DEVICES.md` covers it.
 
 ## Tests
 
 ```bash
-cd android && ./gradlew :core:test :app:testDebugUnitTest   # 183 unit tests
-cd python  && python3 -m unittest discover -s tests -t .    # 55 unit tests
+cd android && ./gradlew :core:test :app:testDebugUnitTest   # 187 unit tests
+cd python  && python3 -m unittest discover -s tests -t .    # 57 unit tests
 ```
 
 Both suites run on a desktop with no device attached and no packages installed. The Python tests use
