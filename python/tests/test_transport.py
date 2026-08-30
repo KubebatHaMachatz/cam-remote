@@ -30,13 +30,13 @@ class _Handler(BaseHTTPRequestHandler):
             import time
 
             time.sleep(2)
-        self._respond(200, {"path": self.path, "authorization": self.headers.get("Authorization")})
+        self._respond(200, {"path": self.path, "content_type": self.headers.get("Content-Type")})
 
     def do_POST(self):  # noqa: N802
         length = int(self.headers.get("Content-Length", 0))
         payload = self.rfile.read(length).decode()
-        if self.path == "/v1/unauthorized":
-            self._respond(401, {"error": {"code": "UNAUTHORIZED", "message": "nope"}})
+        if self.path == "/v1/failing":
+            self._respond(500, {"error": {"code": "DEVICE_ERROR", "message": "nope"}})
             return
         if self.path == "/v1/not-json":
             self.send_response(200)
@@ -46,12 +46,7 @@ class _Handler(BaseHTTPRequestHandler):
             return
         self._respond(
             200,
-            {
-                "path": self.path,
-                "body": payload,
-                "authorization": self.headers.get("Authorization"),
-                "content_type": self.headers.get("Content-Type"),
-            },
+            {"path": self.path, "body": payload, "content_type": self.headers.get("Content-Type")},
         )
 
     def _respond(self, status, payload):
@@ -67,7 +62,11 @@ class _Handler(BaseHTTPRequestHandler):
 
 
 class HttpTransportTest(unittest.TestCase):
-    """The transport, exercised against a real server on a loopback socket."""
+    """The transport, exercised against a real server on a loopback socket.
+
+    Deliberately carries no credential of any kind: the project assumes exactly one agent and one
+    client share the LAN, so there is nothing here to authenticate.
+    """
 
     @classmethod
     def setUpClass(cls):
@@ -81,33 +80,21 @@ class HttpTransportTest(unittest.TestCase):
         cls.server.shutdown()
         cls.server.server_close()
 
-    def transport(self, token="a-token", timeout=10.0):
-        return HttpTransport(host="127.0.0.1", port=self.port, token=token, timeout=timeout)
-
-    def test_sends_the_bearer_token(self):
-        response = self.transport().request("POST", "/v1/command", body=b"{}")
-
-        self.assertEqual("Bearer a-token", response.json()["authorization"])
+    def transport(self, timeout=10.0):
+        return HttpTransport(host="127.0.0.1", port=self.port, timeout=timeout)
 
     def test_sends_json_content_type(self):
         response = self.transport().request("POST", "/v1/command", body=b"{}")
 
         self.assertEqual("application/json", response.json()["content_type"])
 
-    def test_omits_the_header_when_there_is_no_token(self):
-        # `pair` and `health` are reached before a token exists; sending "Bearer None" would be
-        # worse than sending nothing.
-        response = self.transport(token=None).request("POST", "/v1/command", body=b"{}")
-
-        self.assertIsNone(response.json()["authorization"])
-
     def test_returns_the_body_of_an_error_status_rather_than_raising(self):
-        # A 401 carries an error envelope worth showing the operator, so the transport hands it
-        # back and lets the client decide what it means.
-        response = self.transport().request("POST", "/v1/unauthorized", body=b"{}")
+        # An error envelope is worth showing the operator, so the transport hands it back and lets
+        # the client decide what it means rather than raising itself.
+        response = self.transport().request("POST", "/v1/failing", body=b"{}")
 
-        self.assertEqual(401, response.status)
-        self.assertEqual("UNAUTHORIZED", response.json()["error"]["code"])
+        self.assertEqual(500, response.status)
+        self.assertEqual("DEVICE_ERROR", response.json()["error"]["code"])
 
     def test_reports_a_non_json_body_as_a_transport_error(self):
         response = self.transport().request("POST", "/v1/not-json", body=b"{}")
@@ -122,7 +109,7 @@ class HttpTransportTest(unittest.TestCase):
         self.assertEqual("a-photo.jpg", response.filename())
 
     def test_reports_an_unreachable_agent_clearly(self):
-        unreachable = HttpTransport(host="127.0.0.1", port=1, token="t", timeout=2.0)
+        unreachable = HttpTransport(host="127.0.0.1", port=1, timeout=2.0)
 
         with self.assertRaises(TransportError) as caught:
             unreachable.request("GET", "/v1/health")

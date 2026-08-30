@@ -22,18 +22,14 @@ class HttpTransport(Transport):
         self,
         host: str,
         port: int = DEFAULT_PORT,
-        token: str | None = None,
         timeout: float = DEFAULT_TIMEOUT_SECONDS,
     ):
         """Points this transport at one agent.
 
-        :param token: sent as a bearer credential on every request; omitted entirely when None,
-            since `health` and `pair` are reached before a token exists.
         :param timeout: generous by default, because a capture legitimately takes seconds.
         """
         self.host = host
         self.port = port
-        self.token = token
         self.timeout = timeout
 
     @property
@@ -55,8 +51,6 @@ class HttpTransport(Transport):
             method=method,
         )
         request.add_header("Content-Type", "application/json")
-        if self.token:
-            request.add_header("Authorization", f"Bearer {self.token}")
 
         try:
             with urllib.request.urlopen(request, timeout=self.timeout) as response:
@@ -66,9 +60,9 @@ class HttpTransport(Transport):
                     headers=dict(response.headers.items()),
                 )
         except urllib.error.HTTPError as error:
-            # 401 and 404 carry an error envelope worth showing the operator, so an error status is
-            # a normal reply here rather than an exception. HTTPError holds an open socket, hence
-            # the explicit close.
+            # A non-2xx status can still carry an error envelope worth showing the operator, so an
+            # error status is a normal reply here rather than an exception. HTTPError holds an open
+            # socket, hence the explicit close.
             with error:
                 return Response(
                     status=error.code,

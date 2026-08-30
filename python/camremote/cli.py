@@ -8,7 +8,7 @@ Exit codes, because a script may depend on them:
 
 ===  ====================================================================
   0  the command succeeded
-  1  the agent was reached and reported a failure (including a bad token)
+  1  the agent was reached and reported a failure
   2  the command line was wrong
   3  no agent could be reached
 ===  ====================================================================
@@ -25,13 +25,7 @@ from camremote import config
 from camremote.client import RemoteClient
 from camremote.commands import COMMANDS, Context
 from camremote.discovery import discover as discover_agents
-from camremote.errors import (
-    AuthenticationError,
-    CamRemoteError,
-    CommandFailed,
-    NoAgentFound,
-    TransportError,
-)
+from camremote.errors import CamRemoteError, CommandFailed, NoAgentFound, TransportError
 from camremote.transport.http import HttpTransport
 
 EXIT_OK = 0
@@ -77,7 +71,6 @@ def build_parser() -> _Parser:
     )
     parser.add_argument("--host", help="Agent address. Discovered over mDNS when omitted.")
     parser.add_argument("--port", type=int, help=f"Agent port (default: {config.DEFAULT_PORT}).")
-    parser.add_argument("--token", help="Bearer token. Normally supplied by 'camremote pair'.")
     parser.add_argument(
         "--timeout",
         type=float,
@@ -134,7 +127,7 @@ def main(
     finder = discover or (lambda timeout: discover_agents(timeout=timeout))
 
     try:
-        resolved = config.resolve(args.host, args.port, args.token, path)
+        resolved = config.resolve(args.host, args.port, path)
         client = None
         if command.needs_agent:
             resolved = _locate_agent(resolved, finder)
@@ -152,9 +145,6 @@ def main(
         )
         return command.run(context)
 
-    except AuthenticationError as error:
-        print(f"error: {error}", file=err)
-        return EXIT_COMMAND_FAILED
     except CommandFailed as error:
         print(f"error [{error.code}]: {error.message}", file=err)
         if error.remediation:
@@ -214,7 +204,7 @@ def _locate_agent(
         )
 
     found = agents[0]
-    return config.AgentConfig(host=found.host, port=found.port, token=resolved.token)
+    return config.AgentConfig(host=found.host, port=found.port)
 
 
 def _http_client(timeout: float) -> Callable[[config.AgentConfig], RemoteClient]:
@@ -225,14 +215,7 @@ def _http_client(timeout: float) -> Callable[[config.AgentConfig], RemoteClient]
 
     def connect(resolved: config.AgentConfig) -> RemoteClient:
         """Connects to the agent named by the resolved configuration."""
-        return RemoteClient(
-            HttpTransport(
-                host=resolved.host,
-                port=resolved.port,
-                token=resolved.token,
-                timeout=timeout,
-            )
-        )
+        return RemoteClient(HttpTransport(host=resolved.host, port=resolved.port, timeout=timeout))
 
     return connect
 

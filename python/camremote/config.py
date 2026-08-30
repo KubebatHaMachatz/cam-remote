@@ -1,8 +1,12 @@
-"""Where the agent is, and the secret for talking to it.
+"""Where the agent is.
 
 Three sources can supply that, in a fixed order of precedence: an explicit flag, then the
-environment, then the file written by ``camremote pair``. Anything still missing afterwards is left
+environment, then a file written by ``camremote pair``. Anything still missing afterwards is left
 as None, and the CLI falls back to mDNS discovery.
+
+There is no secret to manage here: the project assumes exactly one agent and one client share the
+LAN, so ``pair`` is purely a convenience -- it finds the agent and remembers its address, with no
+code or handshake involved.
 """
 
 from __future__ import annotations
@@ -19,14 +23,12 @@ DEFAULT_CONFIG_PATH = Path.home() / ".camremote.toml"
 
 ENV_HOST = "CAMREMOTE_HOST"
 ENV_PORT = "CAMREMOTE_PORT"
-ENV_TOKEN = "CAMREMOTE_TOKEN"
 
 
 @dataclass(frozen=True)
 class AgentConfig:
     host: str | None = None
     port: int = DEFAULT_PORT
-    token: str | None = None
 
 
 def load(path: Path | None = None) -> AgentConfig:
@@ -43,16 +45,11 @@ def load(path: Path | None = None) -> AgentConfig:
     return AgentConfig(
         host=parsed.get("host"),
         port=int(parsed.get("port", DEFAULT_PORT)),
-        token=parsed.get("token"),
     )
 
 
 def save(agent: AgentConfig, path: Path | None = None) -> Path:
-    """Writes the agent to disk, readable only by this user.
-
-    Hand-rolled TOML because the standard library reads the format but does not write it, and three
-    scalar keys do not justify a dependency in a client that otherwise needs none.
-    """
+    """Writes the agent to disk, so later commands do not need --host every time."""
     path = path or DEFAULT_CONFIG_PATH
     path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -60,33 +57,24 @@ def save(agent: AgentConfig, path: Path | None = None) -> Path:
     if agent.host:
         lines.append(f'host = "{_escape(agent.host)}"')
     lines.append(f"port = {agent.port}")
-    if agent.token:
-        lines.append(f'token = "{_escape(agent.token)}"')
 
     path.write_text("\n".join(lines) + "\n")
-    # The token authorises taking photographs with someone's phone; other users on a shared machine
-    # have no business reading it.
-    path.chmod(0o600)
     return path
 
 
 def resolve(
     host: str | None,
     port: int | None,
-    token: str | None,
     path: Path | None = None,
 ) -> AgentConfig:
     """Combines flags, environment and file, in that order of precedence."""
     resolved = load(path)
 
     env_host = os.environ.get(ENV_HOST)
-    env_token = os.environ.get(ENV_TOKEN)
     env_port = os.environ.get(ENV_PORT)
 
     if env_host:
         resolved = replace(resolved, host=env_host)
-    if env_token:
-        resolved = replace(resolved, token=env_token)
     if env_port:
         try:
             resolved = replace(resolved, port=int(env_port))
@@ -99,8 +87,6 @@ def resolve(
         resolved = replace(resolved, host=host)
     if port:
         resolved = replace(resolved, port=port)
-    if token:
-        resolved = replace(resolved, token=token)
 
     return resolved
 

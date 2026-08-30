@@ -10,7 +10,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from camremote.client import RemoteClient
-from camremote.errors import AuthenticationError, CommandFailed, TransportError
+from camremote.errors import CommandFailed, TransportError
 from camremote.transport.base import Response, Transport
 
 
@@ -122,14 +122,6 @@ class InvokeTest(unittest.TestCase):
         self.assertEqual("PRECONDITION_FAILED", caught.exception.code)
         self.assertEqual("complete setup on the device", caught.exception.remediation)
 
-    def test_reports_a_rejected_token_distinctly(self):
-        transport = FakeTransport(
-            json_response({"error": {"code": "UNAUTHORIZED", "message": "no"}}, status=401)
-        )
-
-        with self.assertRaises(AuthenticationError):
-            RemoteClient(transport).invoke("system.ping")
-
     def test_reports_an_unparseable_reply_as_a_transport_problem(self):
         transport = FakeTransport(Response(status=200, body=b"<html>hello</html>"))
 
@@ -137,37 +129,16 @@ class InvokeTest(unittest.TestCase):
             RemoteClient(transport).invoke("system.ping")
 
 
-class HealthAndPairingTest(unittest.TestCase):
-    """The two endpoints reached before a token exists."""
+class HealthTest(unittest.TestCase):
+    """The reachability probe -- tells "wrong address" from "the agent is not there"."""
 
-    def test_reads_health_without_a_token(self):
+    def test_reads_health(self):
         transport = FakeTransport(json_response({"service": "cam-remote", "apiVersion": "v1"}))
 
         health = RemoteClient(transport).health()
 
         self.assertEqual("cam-remote", health["service"])
         self.assertEqual(("GET", "/v1/health"), transport.requests[0][:2])
-
-    def test_claims_the_token_while_the_window_is_open(self):
-        transport = FakeTransport(json_response({"token": "abc123", "device": {"model": "Pixel"}}))
-
-        token = RemoteClient(transport).pair()
-
-        self.assertEqual("abc123", token)
-        self.assertEqual(("POST", "/v1/pair"), transport.requests[0][:2])
-
-    def test_explains_a_closed_pairing_window(self):
-        transport = FakeTransport(
-            json_response(
-                {"error": {"code": "UNAUTHORIZED", "message": "No pairing window is open"}},
-                status=403,
-            )
-        )
-
-        with self.assertRaises(CommandFailed) as caught:
-            RemoteClient(transport).pair()
-
-        self.assertIn("pairing window", str(caught.exception).lower())
 
 
 class DownloadTest(unittest.TestCase):

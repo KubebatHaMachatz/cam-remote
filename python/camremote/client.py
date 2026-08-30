@@ -12,13 +12,12 @@ import uuid
 from pathlib import Path
 from typing import Any, Mapping
 
-from camremote.errors import AuthenticationError, CommandFailed, TransportError
+from camremote.errors import CommandFailed, TransportError
 from camremote.models import CommandResponse
 from camremote.transport.base import Response, Transport
 
 COMMAND_PATH = "/v1/command"
 HEALTH_PATH = "/v1/health"
-PAIR_PATH = "/v1/pair"
 
 
 class RemoteClient:
@@ -36,7 +35,6 @@ class RemoteClient:
     def invoke(self, command: str, params: Mapping[str, Any] | None = None) -> CommandResponse:
         """Runs a command on the device.
 
-        :raises AuthenticationError: the token was missing or wrong.
         :raises CommandFailed: the agent ran the command and it failed.
         :raises TransportError: the agent could not be reached or did not answer sensibly.
         """
@@ -61,20 +59,10 @@ class RemoteClient:
         return parsed
 
     def health(self) -> Mapping[str, Any]:
-        """Reads the unauthenticated health endpoint, to tell "wrong address" from "wrong token"."""
+        """Reads the reachability probe, to tell "wrong address" from "the agent is not there"."""
         response = self.transport.request("GET", HEALTH_PATH)
         self._raise_for_transport_status(response, context="health")
         return response.json()
-
-    def pair(self) -> str:
-        """Claims the token while the user-opened pairing window is live."""
-        response = self.transport.request("POST", PAIR_PATH)
-        self._raise_for_transport_status(response, context="pair")
-        payload = response.json()
-        token = payload.get("token")
-        if not token:
-            raise TransportError("The agent's pairing reply carried no token")
-        return token
 
     def download(self, path: str, destination: Path) -> Path:
         """Fetches a stored photo and writes it to ``destination``.
@@ -97,11 +85,9 @@ class RemoteClient:
 
     @staticmethod
     def _raise_for_transport_status(response: Response, context: str) -> None:
-        """Turns an HTTP error status into the matching typed exception.
+        """Turns an HTTP error status into `CommandFailed`.
 
-        Failures arrive in the same envelope whatever their status, so one reader serves them
-        all; only 401 is singled out, because a rejected token needs a different remedy from
-        everything else.
+        Failures arrive in the same envelope whatever their status, so one reader serves them all.
         """
         if response.status < 400:
             return
@@ -111,14 +97,9 @@ class RemoteClient:
         except TransportError:
             error = {}
 
-        message = error.get("message") or f"The agent returned HTTP {response.status}"
-        if response.status == 401:
-            raise AuthenticationError(
-                f"{message}. Run 'camremote pair' after tapping Pair on the device."
-            )
         raise CommandFailed(
             command=context,
             code=error.get("code", "INTERNAL"),
-            message=message,
+            message=error.get("message") or f"The agent returned HTTP {response.status}",
             remediation=error.get("remediation"),
         )

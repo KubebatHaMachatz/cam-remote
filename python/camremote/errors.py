@@ -14,10 +14,6 @@ class TransportError(CamRemoteError):
     """The agent could not be reached, or answered with something unintelligible."""
 
 
-class AuthenticationError(CamRemoteError):
-    """The agent rejected the bearer token."""
-
-
 class CommandFailed(CamRemoteError):
     """The agent ran the command and it failed.
 

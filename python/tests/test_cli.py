@@ -12,17 +12,20 @@ from tempfile import TemporaryDirectory
 
 from camremote import cli, config
 from camremote.discovery.mdns import DiscoveredAgent
-from camremote.errors import AuthenticationError, CommandFailed, TransportError
+from camremote.errors import CommandFailed, TransportError
 from camremote.models import CommandResponse
 
 
 class FakeClient:
     """Stands in for a RemoteClient, recording calls and replaying scripted results."""
 
-    def __init__(self, results=None, health=None, token="paired-token", raises=None, failures=None):
+    def __init__(self, results=None, health=None, raises=None, failures=None):
         self.results = results or {}
-        self._health = health or {"service": "cam-remote", "apiVersion": "v1"}
-        self.token = token
+        self._health = health or {
+            "service": "cam-remote",
+            "apiVersion": "v1",
+            "device": {"model": "realme RMX3563"},
+        }
         self.raises = raises
         self.failures = failures or {}
         self.calls = []
@@ -43,11 +46,6 @@ class FakeClient:
             raise self.raises
         return self._health
 
-    def pair(self):
-        if self.raises:
-            raise self.raises
-        return self.token
-
     def download(self, path, destination):
         self.downloads.append((path, destination))
         target = Path(destination) / "capture.jpg" if destination.suffix == "" else destination
@@ -64,7 +62,7 @@ class CliTestCase(unittest.TestCase):
         self.err = io.StringIO()
         self.directory = TemporaryDirectory()
         self.config_path = Path(self.directory.name) / "camremote.toml"
-        config.save(config.AgentConfig(host="10.0.0.4", port=8099, token="t"), self.config_path)
+        config.save(config.AgentConfig(host="10.0.0.4", port=8099), self.config_path)
         self.addCleanup(self.directory.cleanup)
 
     def run_cli(self, *argv, client=None, agents=None):
@@ -166,11 +164,6 @@ class FailureTest(CliTestCase):
         self.run_cli("system-ping", client=client, agents=[])
 
         self.assertNotIn("Found these", self.err.getvalue())
-
-    def test_a_rejected_token_exits_one(self):
-        client = FakeClient(raises=AuthenticationError("Missing or invalid bearer token"))
-
-        self.assertEqual(1, self.run_cli("system-ping", client=client))
 
     def test_an_unknown_subcommand_exits_two(self):
         self.assertEqual(2, self.run_cli("teleport"))
@@ -295,23 +288,30 @@ class DiscoveryTest(CliTestCase):
 
 
 class PairingTest(CliTestCase):
-    """Claiming a token and remembering the agent it belongs to."""
+    """Finding the agent and remembering its address -- no code, no handshake."""
 
-    def test_saves_the_token_it_was_given(self):
-        client = FakeClient(token="fresh-token")
+    def test_confirms_reachability_and_saves_the_address(self):
+        code = self.run_cli("pair", client=FakeClient())
+
+        self.assertEqual(0, code)
+        saved = config.load(self.config_path)
+        self.assertEqual("10.0.0.4", saved.host)
+        self.assertEqual(8099, saved.port)
+
+    def test_a_client_that_cannot_be_reached_fails_pairing(self):
+        client = FakeClient(raises=TransportError("Could not reach the agent at 10.0.0.4:8099"))
 
         code = self.run_cli("pair", client=client)
 
-        self.assertEqual(0, code)
-        self.assertEqual("fresh-token", config.load(self.config_path).token)
+        self.assertEqual(3, code)
 
-    def test_records_the_agent_address_alongside_the_token(self):
+    def test_records_the_agent_address_discovery_found(self):
         agent = DiscoveredAgent(instance="a", host="10.0.0.7", port=8099, attributes={})
         empty_config = Path(self.directory.name) / "empty.toml"
 
         cli.main(
             ["pair"],
-            connect=lambda resolved: FakeClient(token="tok"),
+            connect=lambda resolved: FakeClient(),
             discover=lambda timeout: [agent],
             config_path=empty_config,
             out=self.out,
@@ -320,7 +320,14 @@ class PairingTest(CliTestCase):
 
         saved = config.load(empty_config)
         self.assertEqual("10.0.0.7", saved.host)
-        self.assertEqual("tok", saved.token)
+        self.assertEqual(8099, saved.port)
+
+    def test_names_the_device_found(self):
+        client = FakeClient(health={"service": "cam-remote", "device": {"model": "SM-S921B"}})
+
+        self.run_cli("pair", client=client)
+
+        self.assertIn("SM-S921B", self.out.getvalue())
 
 
 class CatalogTest(CliTestCase):

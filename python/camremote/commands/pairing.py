@@ -1,4 +1,4 @@
-"""Finding an agent, and getting its token."""
+"""Finding the agent, and remembering where it is."""
 
 from __future__ import annotations
 
@@ -41,24 +41,22 @@ def _discover(context: Context) -> int:
 
 
 def _pair(context: Context) -> int:
-    """Claims the agent's token and saves it, with the address, for later commands.
+    """Confirms the agent is reachable and remembers its address.
 
-    Requires someone to have tapped Pair on the handset moments before; that physical act is
-    what authorises the handover.
+    There is no code and no handshake: the project assumes exactly one agent and one client share
+    the LAN, so this is purely a convenience -- it saves a round trip of mDNS discovery on every
+    later command, nothing more.
     """
-    token = context.agent.pair()
+    health = context.agent.health()
     saved = config.save(
-        config.AgentConfig(
-            host=context.resolved.host,
-            port=context.resolved.port,
-            token=token,
-        ),
+        config.AgentConfig(host=context.resolved.host, port=context.resolved.port),
         context.config_path,
     )
+    device = health.get("device", {})
     context.emit(
-        {"token": token, "savedTo": str(saved)},
-        f"Paired with {context.agent.base_url}",
-        f"Token saved to {saved}",
+        {"device": device, "savedTo": str(saved)},
+        f"Found {device.get('model', context.agent.base_url)} at {context.agent.base_url}",
+        f"Address saved to {saved}",
     )
     return 0
 
@@ -73,6 +71,6 @@ DISCOVER = CliCommand(
 
 PAIR = CliCommand(
     name="pair",
-    help="Claim the agent's token. Tap Pair on the device first.",
+    help="Find the agent and remember its address, so later commands do not need --host.",
     run=_pair,
 )
