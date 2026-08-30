@@ -21,15 +21,30 @@ def _ping(context: Context) -> int:
     return 0
 
 
-def _status(context: Context) -> int:
-    """Summarises the device and, when setup is incomplete, names exactly what is missing.
+#: What each grant actually enables, in terms of the commands an operator would try.
+#:
+#: Only used to annotate a permission that is missing, where "what is now impossible" is the useful
+#: half. Anything the agent reports that is absent from this table is still listed, by name alone --
+#: the agent is the authority on its own permissions, exactly as it is for its own commands, and a
+#: newer agent must not have a grant silently dropped by an older client.
+PERMISSION_EFFECTS = {
+    "camera": "blocks take-picture",
+    "notifications": "hides the notification that shows the agent's address",
+    "canDrawOverlays": "blocks open-camera, which starts an app from the background",
+    "ignoringBatteryOptimizations": "the agent may stop answering with the screen off",
+}
 
-    The first question after any failure is which grant is absent, and answering it from here
-    saves walking over to wherever the phone is.
+
+def _status(context: Context) -> int:
+    """Summarises the device and reports every permission it holds, granted or not.
+
+    The first questions after any failure are which grants are absent and what they cost, and
+    answering both from here saves walking over to wherever the phone is.
     """
     response = context.agent.invoke("system.status")
     data = response.data
     device = data.get("device", {})
+    permissions = data.get("permissions", {})
     missing = data.get("missing", [])
 
     lines = [
@@ -37,6 +52,18 @@ def _status(context: Context) -> int:
         f"(Android {device.get('androidRelease')}, API {device.get('apiLevel')})",
         f"Rear camera: {'yes' if data.get('hasRearCamera') else 'no'}",
     ]
+
+    if permissions:
+        lines.append("")
+        lines.append("Permissions:")
+        width = max(len(name) for name in permissions)
+        for name, granted in permissions.items():
+            note = "" if granted else PERMISSION_EFFECTS.get(name, "")
+            state = "granted" if granted else "MISSING"
+            line = f"  {name:<{width}}  {state}"
+            lines.append(f"{line}  - {note}" if note else line)
+        lines.append("")
+
     if data.get("setupComplete"):
         lines.append("Setup complete: every command is available.")
     else:

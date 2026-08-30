@@ -97,6 +97,13 @@ does, so it is worth re-reading the shade rather than trusting a value from yest
 ```
 realme RMX3563 (Android 14, API 34)
 Rear camera: yes
+
+Permissions:
+  camera                        granted
+  notifications                 granted
+  canDrawOverlays               granted
+  ignoringBatteryOptimizations  granted
+
 Setup complete: every command is available.
 ```
 
@@ -105,9 +112,25 @@ Setup complete: every command is available.
 ```
 samsung SM-S921B (Android 14, API 34)
 Rear camera: yes
+
+Permissions:
+  camera                        granted
+  notifications                 granted
+  canDrawOverlays               MISSING  - blocks open-camera, which starts an app from the background
+  ignoringBatteryOptimizations  granted
+
 Setup incomplete. Missing on the device: canDrawOverlays
 Open cam-remote on the handset and grant the items listed above.
 ```
+
+Every permission the agent knows about is listed either way, granted or not, so this answers "is the
+device ready" and "what exactly is it missing" in one round trip. A missing one is annotated with
+what it costs, because the useful half of a denied grant is which command has just become
+impossible.
+
+The list comes from the agent rather than from a table in the client, so a permission a newer agent
+reports and this client has never heard of is still shown — by name, without a note. That is the
+same arrangement as `commands`: the device is the authority on its own capabilities.
 
 **How to verify:** the model and Android version should match the physical device in front of you.
 Run this first after any setup change — it is the fastest way to confirm a permission grant actually
@@ -116,8 +139,7 @@ took effect before testing the command that depends on it.
 ```bash
 ./scripts/camremote --host 10.0.0.4 --json status
 ```
-gives the full JSON, including every individual permission flag (`camera`, `notifications`,
-`canDrawOverlays`, `ignoringBatteryOptimizations`) rather than just the missing list.
+gives the same information as raw JSON, for a script that wants to assert on it.
 
 ---
 
