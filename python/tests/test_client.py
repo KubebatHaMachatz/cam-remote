@@ -129,18 +129,6 @@ class InvokeTest(unittest.TestCase):
             RemoteClient(transport).invoke("system.status")
 
 
-class HealthTest(unittest.TestCase):
-    """The reachability probe -- tells "wrong address" from "the agent is not there"."""
-
-    def test_reads_health(self):
-        transport = FakeTransport(json_response({"service": "cam-remote", "apiVersion": "v1"}))
-
-        health = RemoteClient(transport).health()
-
-        self.assertEqual("cam-remote", health["service"])
-        self.assertEqual(("GET", "/v1/health"), transport.requests[0][:2])
-
-
 class DownloadTest(unittest.TestCase):
     """Saving a photograph, including choosing a filename when only a directory is given."""
 

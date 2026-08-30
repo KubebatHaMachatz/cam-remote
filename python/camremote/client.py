@@ -17,7 +17,6 @@ from camremote.models import CommandResponse
 from camremote.transport.base import Response, Transport
 
 COMMAND_PATH = "/v1/command"
-HEALTH_PATH = "/v1/health"
 
 
 class RemoteClient:
@@ -26,11 +25,6 @@ class RemoteClient:
     def __init__(self, transport: Transport):
         """Binds this client to one agent, reached through the given transport."""
         self.transport = transport
-
-    @property
-    def base_url(self) -> str:
-        """Where the agent is, as the transport describes it."""
-        return self.transport.base_url
 
     def invoke(self, command: str, params: Mapping[str, Any] | None = None) -> CommandResponse:
         """Runs a command on the device.
@@ -57,12 +51,6 @@ class RemoteClient:
                 remediation=error.remediation if error else None,
             )
         return parsed
-
-    def health(self) -> Mapping[str, Any]:
-        """Reads the reachability probe, to tell "wrong address" from "the agent is not there"."""
-        response = self.transport.request("GET", HEALTH_PATH)
-        self._raise_for_transport_status(response, context="health")
-        return response.json()
 
     def download(self, path: str, destination: Path) -> Path:
         """Fetches a stored photo and writes it to ``destination``.

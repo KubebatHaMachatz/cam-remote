@@ -18,18 +18,12 @@ from camremote.models import CommandResponse
 class FakeClient:
     """Stands in for a RemoteClient, recording calls and replaying scripted results."""
 
-    def __init__(self, results=None, health=None, raises=None, failures=None):
+    def __init__(self, results=None, raises=None, failures=None):
         self.results = results or {}
-        self._health = health or {
-            "service": "cam-remote",
-            "apiVersion": "v1",
-            "device": {"model": "realme RMX3563"},
-        }
         self.raises = raises
         self.failures = failures or {}
         self.calls = []
         self.downloads = []
-        self.base_url = "http://10.0.0.4:8099"
 
     def invoke(self, command, params=None):
         self.calls.append((command, params))
@@ -39,11 +33,6 @@ class FakeClient:
             raise self.failures[command]
         data = self.results.get(command, {})
         return CommandResponse(id="1", command=command, status="OK", data=data, duration_ms=5)
-
-    def health(self):
-        if self.raises:
-            raise self.raises
-        return self._health
 
     def download(self, path, destination):
         self.downloads.append((path, destination))
