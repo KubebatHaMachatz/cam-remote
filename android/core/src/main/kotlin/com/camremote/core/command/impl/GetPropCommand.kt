@@ -4,6 +4,7 @@ import com.camremote.core.command.Command
 import com.camremote.core.command.CommandOutcome
 import com.camremote.core.logic.PropertyKeys
 import com.camremote.core.port.PropertyReader
+import com.camremote.core.protocol.CommandCategory
 import com.camremote.core.protocol.CommandDescriptor
 import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.InvalidParamsException
@@ -25,6 +26,7 @@ class GetPropCommand(private val properties: PropertyReader) : Command {
 
     override val descriptor = CommandDescriptor(
         name = "device.getprop",
+        category = CommandCategory.PRIMARY,
         description = "Read one or more Android system properties.",
         parameters = listOf(
             ParameterDescriptor(

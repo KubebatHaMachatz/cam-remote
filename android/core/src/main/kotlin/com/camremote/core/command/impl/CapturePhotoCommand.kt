@@ -11,6 +11,7 @@ import com.camremote.core.port.Clock
 import com.camremote.core.port.PermissionInspector
 import com.camremote.core.port.PermissionPrompt
 import com.camremote.core.port.PhotoStore
+import com.camremote.core.protocol.CommandCategory
 import com.camremote.core.protocol.CommandDescriptor
 import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.InvalidParamsException
@@ -45,6 +46,7 @@ class CapturePhotoCommand(
 
     override val descriptor = CommandDescriptor(
         name = "camera.capture",
+        category = CommandCategory.PRIMARY,
         description = "Take a still photograph with the rear camera and save it under Documents.",
         parameters = listOf(
             ParameterDescriptor(

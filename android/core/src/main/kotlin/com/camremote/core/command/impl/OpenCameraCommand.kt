@@ -8,6 +8,7 @@ import com.camremote.core.logic.CameraAppLaunch
 import com.camremote.core.port.ActivityStarter
 import com.camremote.core.port.PermissionInspector
 import com.camremote.core.port.PermissionPrompt
+import com.camremote.core.protocol.CommandCategory
 import com.camremote.core.protocol.CommandDescriptor
 import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.ParameterDescriptor
@@ -44,6 +45,7 @@ class OpenCameraCommand(
 
     override val descriptor = CommandDescriptor(
         name = "camera.open",
+        category = CommandCategory.PRIMARY,
         description = "Open the device's camera app. The lens hint is best-effort and app-dependent.",
         parameters = listOf(
             ParameterDescriptor(

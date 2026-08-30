@@ -112,7 +112,27 @@ data class CommandDescriptor(
     val name: String,
     val description: String,
     val parameters: List<ParameterDescriptor> = emptyList(),
+    val category: CommandCategory = CommandCategory.DIAGNOSTIC,
 )
+
+/**
+ * Whether a command is something the agent exists to do, or a tool for working out why it will not.
+ *
+ * A client groups its listing by this, so an operator meeting the agent for the first time sees the
+ * three things it is for before the four ways to interrogate it.
+ *
+ * [DIAGNOSTIC] is the default deliberately: a command has to declare itself [PRIMARY], because that
+ * claim is about the agent's purpose rather than about the command, and it should be made on
+ * purpose rather than inherited by forgetting. A new command that says nothing lands among the
+ * tools, which is the harmless side of the mistake.
+ */
+enum class CommandCategory {
+    /** One of the capabilities the agent exists to provide. */
+    PRIMARY,
+
+    /** A way to inspect the agent or the device, rather than to use it. */
+    DIAGNOSTIC,
+}
 
 @Serializable
 data class ParameterDescriptor(
