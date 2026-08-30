@@ -17,20 +17,22 @@ import androidx.lifecycle.LifecycleService
 import com.camremote.app.R
 import com.camremote.app.adapter.NsdServiceAdvertiser
 import com.camremote.app.di.AppContainer
-import com.camremote.app.setup.SetupActivity
+import com.camremote.app.setup.LaunchActivity
 import com.camremote.app.transport.http.HttpCommandServer
 import com.camremote.app.transport.http.commandApi
 import com.camremote.core.protocol.HealthResponse
 
 /**
  * The agent itself: a foreground service that owns the HTTP server, the mDNS advertisement and the
- * Wi-Fi lock, and lives for as long as the user leaves it switched on.
+ * Wi-Fi lock, and runs for as long as Android lets it — there is no on/off switch, because there is
+ * no screen to put one on.
  *
  * A service rather than an activity because the app has no control UI by design — there is nothing
- * for a user to look at while commands are being served. In an app with a UI this is roughly the
- * role a ViewModel would play: it is the thing that outlives any screen and owns the coroutine
- * scope. Extending [LifecycleService] gives it the `LifecycleOwner` that CameraX needs to bind to,
- * which is the other reason a plain `Service` would not do.
+ * for a user to look at while commands are being served; [LaunchActivity] is a permission trampoline,
+ * not a dashboard. In an app with a UI this service is roughly the role a ViewModel would play: it
+ * is the thing that outlives any screen and owns the coroutine scope. Extending [LifecycleService]
+ * gives it the `LifecycleOwner` that CameraX needs to bind to, which is the other reason a plain
+ * `Service` would not do.
  */
 class RemoteControlService : LifecycleService() {
 
@@ -47,25 +49,16 @@ class RemoteControlService : LifecycleService() {
     }
 
     /**
-     * Starts the agent, or stops it when sent [ACTION_STOP].
+     * Starts the agent. There is no corresponding stop from within the app — nothing to send it
+     * from, with no UI — so uninstalling is how the agent is turned off.
      *
      * Returns START_STICKY so Android brings the agent back if it reclaims the process: an
-     * agent that has quietly stopped answering is worse than one that is plainly switched off.
+     * agent that has quietly stopped answering is worse than a service that was never running.
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
-
-        if (intent?.action == ACTION_STOP) {
-            container.config.isEnabled = false
-            stopSelf()
-            return START_NOT_STICKY
-        }
-
         startInForeground()
         startServer()
-
-        // Restart if Android reclaims the process: an agent that quietly stops answering is worse
-        // than one that is plainly switched off.
         return START_STICKY
     }
 
@@ -74,7 +67,6 @@ class RemoteControlService : LifecycleService() {
         advertiser?.stop()
         server?.stop()
         releaseWifiLock()
-        container.pairingWindow.close()
         super.onDestroy()
     }
 
@@ -94,8 +86,6 @@ class RemoteControlService : LifecycleService() {
         server = HttpCommandServer(port) {
             commandApi(
                 dispatcher = dispatcher,
-                accessControl = container.accessControl,
-                pairingWindow = container.pairingWindow,
                 photos = container.photos,
                 device = container.deviceDescription(),
             )
@@ -131,10 +121,13 @@ class RemoteControlService : LifecycleService() {
             .setSmallIcon(R.drawable.ic_agent_notification)
             .setOngoing(true)
             .setContentIntent(
+                // The guaranteed route to a permission/settings prompt: a notification tap is
+                // always allowed to start an activity, even from the background, unlike a direct
+                // startActivity call from the service.
                 PendingIntent.getActivity(
                     this,
                     0,
-                    Intent(this, SetupActivity::class.java),
+                    Intent(this, LaunchActivity::class.java),
                     PendingIntent.FLAG_IMMUTABLE,
                 ),
             )
@@ -212,18 +205,9 @@ class RemoteControlService : LifecycleService() {
         private const val NOTIFICATION_ID = 1
         private const val WIFI_LOCK_TAG = "cam-remote:agent"
 
-        const val ACTION_STOP = "com.camremote.app.action.STOP"
-
         /** Starts the agent. Safe to call when it is already running. */
         fun start(context: Context) {
             context.startForegroundService(Intent(context, RemoteControlService::class.java))
-        }
-
-        /** Stops the agent and remembers that it is meant to stay stopped. */
-        fun stop(context: Context) {
-            context.startService(
-                Intent(context, RemoteControlService::class.java).setAction(ACTION_STOP),
-            )
         }
     }
 }

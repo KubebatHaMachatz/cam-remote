@@ -7,6 +7,7 @@ import com.camremote.core.logic.CameraAppChoice
 import com.camremote.core.logic.CameraAppLaunch
 import com.camremote.core.port.ActivityStarter
 import com.camremote.core.port.PermissionInspector
+import com.camremote.core.port.PermissionPrompt
 import com.camremote.core.protocol.CommandDescriptor
 import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.ParameterDescriptor
@@ -38,6 +39,7 @@ import kotlinx.serialization.json.buildJsonObject
 class OpenCameraCommand(
     private val activities: ActivityStarter,
     private val permissions: PermissionInspector,
+    private val permissionPrompt: PermissionPrompt,
 ) : Command {
 
     override val descriptor = CommandDescriptor(
@@ -69,11 +71,15 @@ class OpenCameraCommand(
         val candidates = CameraAppLaunch.candidatesFor(params)
 
         if (!permissions.status().canDrawOverlays) {
+            // No setup screen exists, so the only known moment a human might be looking at the
+            // phone is right after a command has just failed -- this is that moment.
+            permissionPrompt.requestAttention()
             return CommandOutcome.failure(
                 code = ErrorCode.PRECONDITION_FAILED,
                 message = "Android will not let a background app start an activity without the " +
                     "overlay permission",
-                remediation = "Open cam-remote on the device and grant \"Display over other apps\"",
+                remediation = "A settings prompt was shown on the device; grant \"Display over other " +
+                    "apps\" there, then retry",
             )
         }
 

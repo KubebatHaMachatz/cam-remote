@@ -8,13 +8,10 @@ import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.ErrorEnvelope
 import com.camremote.core.protocol.HealthResponse
 import com.camremote.core.protocol.MalformedRequestException
-import com.camremote.core.protocol.PairResponse
 import com.camremote.core.protocol.ProtocolJson
-import com.camremote.core.security.AccessControl
-import com.camremote.core.security.PairingWindow
+import io.ktor.http.ContentDisposition
 import io.ktor.http.ContentType
 import io.ktor.http.HttpHeaders
-import io.ktor.http.ContentDisposition
 import io.ktor.http.HttpStatusCode
 import io.ktor.server.application.Application
 import io.ktor.server.application.ApplicationCall
@@ -36,14 +33,16 @@ import io.ktor.server.routing.routing
  * which HTTP status expresses a failure and nothing else. Whether a command may run, how long it may
  * take, and what it returns are all the dispatcher's business.
  *
+ * There is no authentication layer here. The project assumes exactly one agent and one client share
+ * the LAN, so the API is reachable by anyone who can reach the port -- no token, no pairing code.
+ * `docs/DESIGN.md` records that trade-off explicitly, including what it would take to add one back.
+ *
  * Responses are serialised with [ProtocolJson] rather than Ktor's ContentNegotiation so that there
  * is exactly one JSON configuration in the project, and the bytes on the wire are the ones the
  * protocol tests assert.
  */
 fun Application.commandApi(
     dispatcher: CommandDispatcher,
-    accessControl: AccessControl,
-    pairingWindow: PairingWindow,
     photos: PhotoStore,
     device: DeviceDescription,
 ) {
@@ -73,47 +72,11 @@ fun Application.commandApi(
         get("/v1/health") {
             call.respondJson(
                 HttpStatusCode.OK,
-                ProtocolJson.json.encodeToString(
-                    HealthResponse.serializer(),
-                    HealthResponse(device = device, pairingOpen = pairingWindow.isOpen()),
-                ),
+                ProtocolJson.json.encodeToString(HealthResponse.serializer(), HealthResponse(device = device)),
             )
         }
 
-        post("/v1/pair") {
-            // Unauthenticated by necessity: this is how a client learns the token in the first
-            // place. The protection is that a human must have tapped Pair on the handset moments
-            // before, and that the window closes on first use.
-            val token = pairingWindow.claim()
-            if (token == null) {
-                call.respondError(
-                    status = HttpStatusCode.Forbidden,
-                    code = ErrorCode.UNAUTHORIZED,
-                    message = "No pairing window is open",
-                    remediation = "Open cam-remote on the device and tap Pair, then retry within a minute",
-                )
-            } else {
-                call.respondJson(
-                    HttpStatusCode.OK,
-                    ProtocolJson.json.encodeToString(
-                        PairResponse.serializer(),
-                        PairResponse(token = token, device = device),
-                    ),
-                )
-            }
-        }
-
         get("/v1/media/{id}") {
-            if (!accessControl.isAuthorized(call.request.headers[HttpHeaders.Authorization])) {
-                call.respondError(
-                    status = HttpStatusCode.Unauthorized,
-                    code = ErrorCode.UNAUTHORIZED,
-                    message = "Missing or invalid bearer token",
-                    remediation = "Run 'camremote pair' after tapping Pair on the device",
-                )
-                return@get
-            }
-
             val opened = photos.open(call.parameters["id"].orEmpty())
             if (opened == null) {
                 call.respondError(
@@ -144,16 +107,6 @@ fun Application.commandApi(
         }
 
         post("/v1/command") {
-            if (!accessControl.isAuthorized(call.request.headers[HttpHeaders.Authorization])) {
-                call.respondError(
-                    status = HttpStatusCode.Unauthorized,
-                    code = ErrorCode.UNAUTHORIZED,
-                    message = "Missing or invalid bearer token",
-                    remediation = "Run 'camremote pair' after tapping Pair on the device",
-                )
-                return@post
-            }
-
             val request = try {
                 ProtocolJson.decodeRequest(call.receiveText())
             } catch (e: MalformedRequestException) {
@@ -181,7 +134,7 @@ private suspend fun ApplicationCall.respondJson(status: HttpStatusCode, body: St
  * Writes a failure in the standard envelope.
  *
  * Every error the client can meet has the same shape whatever its HTTP status, so the client
- * needs one parser rather than one per status code.
+ * needs one parser for all of them.
  */
 private suspend fun ApplicationCall.respondError(
     status: HttpStatusCode,

@@ -8,7 +8,7 @@ import kotlinx.serialization.Serializable
  * Identity of the handset, as reported to clients.
  *
  * Kept deliberately thin: it is enough for a human to tell two phones apart in `camremote discover`
- * output, and no more. Anything richer is available through `device.getprop`, which requires a token.
+ * output, and no more. Anything richer is available through `device.getprop`.
  */
 @Serializable
 data class DeviceDescription(
@@ -19,10 +19,10 @@ data class DeviceDescription(
 )
 
 /**
- * The unauthenticated reachability probe.
+ * The reachability probe.
  *
- * It answers without a token on purpose: a client needs to be able to tell "wrong address" from
- * "wrong credentials", and the CLI uses it to confirm a discovered address before pairing.
+ * Lets a client tell "wrong address" from "the agent is not there at all" before it bothers
+ * connecting to `/v1/command`.
  */
 @OptIn(ExperimentalSerializationApi::class)
 @Serializable
@@ -32,20 +32,12 @@ data class HealthResponse(
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) val service: String = SERVICE_NAME,
     @EncodeDefault(EncodeDefault.Mode.ALWAYS) val apiVersion: String = API_VERSION,
     val device: DeviceDescription,
-    val pairingOpen: Boolean,
 ) {
     companion object {
         const val SERVICE_NAME = "cam-remote"
         const val API_VERSION = "v1"
     }
 }
-
-/** The token handover, returned only while the user-opened pairing window is live. */
-@Serializable
-data class PairResponse(
-    val token: String,
-    val device: DeviceDescription,
-)
 
 /**
  * A failure that happened before or instead of a command running.

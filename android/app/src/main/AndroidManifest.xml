@@ -11,7 +11,7 @@
 
     <!-- Needed so a background service may start the camera app at all, and as the documented
          exemption from the API 34+ rule against starting a camera-type foreground service from
-         the background. The user grants it once during setup. -->
+         the background. Requested from LaunchActivity, the first time the app is opened. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
@@ -51,13 +51,21 @@
     <application
         android:allowBackup="false"
         android:label="@string/app_name"
-        android:supportsRtl="true"
-        android:theme="@style/Theme.Material3.DayNight">
+        android:supportsRtl="true">
 
+        <!--
+          The app's only screen, and it draws nothing of its own: the translucent theme means the
+          only thing a user ever sees launching this is a native Android dialog (see
+          LaunchActivity's own doc comment). It is still the LAUNCHER, because Android gives no other
+          way to start an app for the first time; every later start is on demand, from a command
+          that needs a permission the device does not have yet.
+        -->
         <activity
-            android:name=".setup.SetupActivity"
+            android:name=".setup.LaunchActivity"
             android:exported="true"
-            android:label="@string/app_name">
+            android:label="@string/app_name"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

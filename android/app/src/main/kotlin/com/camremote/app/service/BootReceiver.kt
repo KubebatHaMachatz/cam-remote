@@ -7,17 +7,18 @@ import android.util.Log
 import com.camremote.app.di.AppContainer
 
 /**
- * Brings the agent back after a reboot, if the user had left it switched on.
+ * Brings the agent back after a reboot, provided the app has been opened at least once before.
  *
  * A headless agent that stops answering because the phone restarted overnight is not much of an
  * agent. Starting a camera-typed foreground service from a boot broadcast is precisely the case
- * Android 14 restricts, which the "Display over other apps" grant from setup exempts us from — and
+ * Android 14 restricts, which the "Display over other apps" grant (requested by
+ * [com.camremote.app.setup.LaunchActivity] the first time the app is opened) exempts us from — and
  * if that grant is missing, the service still starts without the camera type and reports the
  * problem through `system.status` rather than failing silently.
  */
 class BootReceiver : BroadcastReceiver() {
 
-    /** Restarts the agent after a reboot, but only if the user had left it switched on. */
+    /** Restarts the agent after a reboot, but only if it has ever been opened before. */
     override fun onReceive(context: Context, intent: Intent) {
         if (intent.action != Intent.ACTION_BOOT_COMPLETED) return
         if (!AppContainer.from(context).config.isEnabled) return

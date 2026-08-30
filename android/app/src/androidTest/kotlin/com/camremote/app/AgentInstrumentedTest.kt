@@ -116,7 +116,8 @@ class AgentInstrumentedTest {
     fun capturingProducesARealJpegFromTheRearSensor() = runBlocking {
         assumeTrue(
             "CAMERA is not granted and this device does not permit granting it from a test. " +
-                "Open cam-remote on the handset, complete setup, then run this again.",
+                "Open cam-remote on the handset once (or run a camera command and grant it " +
+                "when prompted), then run this again.",
             hasCameraPermission(),
         )
 
@@ -145,13 +146,11 @@ class AgentInstrumentedTest {
     }
 
     @Test
-    fun httpServerAnswersOnARealSocketAndEnforcesItsToken() {
+    fun httpServerAnswersOnARealSocket() {
         val port = freePort()
         val server = HttpCommandServer(port) {
             commandApi(
                 dispatcher = container.dispatcherFor(lifecycle),
-                accessControl = container.accessControl,
-                pairingWindow = container.pairingWindow,
                 photos = container.photos,
                 device = container.deviceDescription(),
             )
@@ -159,17 +158,10 @@ class AgentInstrumentedTest {
         server.start()
 
         try {
-            val body = """{"id":"t4","command":"system.ping"}"""
+            val (status, body) = post(port, """{"id":"t4","command":"system.ping"}""")
 
-            val rejected = post(port, body, token = "not-the-token")
-            assertEquals(401, rejected.first)
-
-            val accepted = post(port, body, token = container.config.token)
-            assertEquals(200, accepted.first)
-            assertEquals(
-                CommandStatus.OK,
-                ProtocolJson.decodeResponse(accepted.second).status,
-            )
+            assertEquals(200, status)
+            assertEquals(CommandStatus.OK, ProtocolJson.decodeResponse(body).status)
         } finally {
             server.stop()
         }
@@ -192,14 +184,13 @@ class AgentInstrumentedTest {
      * connecting to itself — relaxing the shipped app's network policy to satisfy a test would be
      * the wrong trade, so the test speaks HTTP itself instead.
      */
-    private fun post(port: Int, body: String, token: String): Pair<Int, String> {
+    private fun post(port: Int, body: String): Pair<Int, String> {
         Socket("127.0.0.1", port).use { socket ->
             socket.soTimeout = 15_000
             val payload = body.toByteArray()
             val request = buildString {
                 append("POST /v1/command HTTP/1.1\r\n")
                 append("Host: 127.0.0.1:$port\r\n")
-                append("Authorization: Bearer $token\r\n")
                 append("Content-Type: application/json\r\n")
                 append("Content-Length: ${payload.size}\r\n")
                 append("Connection: close\r\n\r\n")

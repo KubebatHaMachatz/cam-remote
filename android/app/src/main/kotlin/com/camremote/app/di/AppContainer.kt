@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Environment
 import androidx.lifecycle.LifecycleOwner
 import com.camremote.app.adapter.AndroidPermissionInspector
+import com.camremote.app.adapter.AndroidPermissionPrompt
 import com.camremote.app.adapter.CameraXController
 import com.camremote.app.adapter.ExecGetPropReader
 import com.camremote.app.adapter.FileSystemPhotoStore
@@ -25,12 +26,11 @@ import com.camremote.core.command.impl.StatusCommand
 import com.camremote.core.logic.FirstAvailablePropertyReader
 import com.camremote.core.port.CameraController
 import com.camremote.core.port.PermissionInspector
+import com.camremote.core.port.PermissionPrompt
 import com.camremote.core.port.PhotoStore
 import com.camremote.core.port.SystemClock
 import com.camremote.core.protocol.CommandDescriptor
 import com.camremote.core.protocol.DeviceDescription
-import com.camremote.core.security.AccessControl
-import com.camremote.core.security.PairingWindow
 import java.io.File
 
 /**
@@ -47,11 +47,9 @@ import java.io.File
  * protocol.
  *
  * The constructor is private and instances come from [from] because there must be exactly one per
- * process. An earlier version let the setup screen and the service each build their own, which
- * type-checked, unit-tested clean, and failed on the handset: the user tapped Pair, opening a
- * pairing window on the activity's copy, while the HTTP server consulted its own copy and refused
- * every request. State shared between an activity and a service has to be shared in fact, not by
- * coincidence, so the shape that caused it is gone rather than merely fixed.
+ * process. An earlier version let two components each build their own, which type-checked,
+ * unit-tested clean, and failed on the handset: two components disagreed about state that must be
+ * shared in fact, not by coincidence, so the shape that caused it is gone rather than merely fixed.
  */
 class AppContainer private constructor(private val context: Context) {
 
@@ -61,9 +59,7 @@ class AppContainer private constructor(private val context: Context) {
 
     val permissions: PermissionInspector by lazy { AndroidPermissionInspector(context) }
 
-    val accessControl: AccessControl by lazy { AccessControl { config.token } }
-
-    val pairingWindow: PairingWindow by lazy { PairingWindow(clock = clock) { config.token } }
+    val permissionPrompt: PermissionPrompt by lazy { AndroidPermissionPrompt(context) }
 
     /**
      * Two mechanisms behind one port: spawning `getprop` works almost everywhere, and reflecting on
@@ -129,9 +125,9 @@ class AppContainer private constructor(private val context: Context) {
         ListCommandsCommand(descriptors),
         StatusCommand(permissions, ::deviceDescription, camera, clock),
         GetPropCommand(properties),
-        OpenCameraCommand(IntentActivityStarter(context), permissions),
+        OpenCameraCommand(IntentActivityStarter(context), permissions, permissionPrompt),
         ListCameraAppsCommand(IntentActivityStarter(context)),
-        CapturePhotoCommand(camera, photos, permissions, clock),
+        CapturePhotoCommand(camera, photos, permissions, clock, permissionPrompt),
     )
 
     companion object {

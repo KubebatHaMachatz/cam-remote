@@ -8,6 +8,7 @@ import com.camremote.core.port.CameraController
 import com.camremote.core.port.CaptureRequest
 import com.camremote.core.port.Clock
 import com.camremote.core.port.PermissionInspector
+import com.camremote.core.port.PermissionPrompt
 import com.camremote.core.port.PhotoStore
 import com.camremote.core.protocol.CommandDescriptor
 import com.camremote.core.protocol.ErrorCode
@@ -32,6 +33,7 @@ class CapturePhotoCommand(
     private val photos: PhotoStore,
     private val permissions: PermissionInspector,
     private val clock: Clock,
+    private val permissionPrompt: PermissionPrompt,
 ) : Command {
 
     override val descriptor = CommandDescriptor(
@@ -76,10 +78,13 @@ class CapturePhotoCommand(
     /** Checks the preconditions, takes the photograph, and records where it landed. */
     override suspend fun execute(params: Params): CommandOutcome {
         if (!permissions.status().camera) {
+            // No setup screen exists, so the only known moment a human might be looking at the
+            // phone is right after a command has just failed -- this is that moment.
+            permissionPrompt.requestAttention()
             return CommandOutcome.failure(
                 code = ErrorCode.PERMISSION_DENIED,
                 message = "The camera permission has not been granted to cam-remote",
-                remediation = "Open cam-remote on the device and complete setup to grant camera access",
+                remediation = "A permission prompt was shown on the device; grant camera access there, then retry",
             )
         }
 

@@ -22,9 +22,6 @@ enum class ErrorCode {
     /** The device refused or failed the operation (no rear camera, camera in use, I/O failure). */
     DEVICE_ERROR,
 
-    /** The request carried a missing or incorrect bearer token. */
-    UNAUTHORIZED,
-
     /** The command exceeded its time budget and was cancelled. */
     TIMEOUT,
 

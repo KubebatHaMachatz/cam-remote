@@ -70,9 +70,7 @@ dependencies {
     implementation(libs.ktor.server.status.pages)
 
     implementation(libs.androidx.core.ktx)
-    implementation(libs.androidx.appcompat)
     implementation(libs.androidx.activity.ktx)
-    implementation(libs.google.material)
     implementation(libs.androidx.lifecycle.service)
     implementation(libs.androidx.camera.core)
     implementation(libs.androidx.camera.camera2)

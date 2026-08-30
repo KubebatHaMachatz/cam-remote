@@ -7,6 +7,7 @@ import com.camremote.core.port.ActivityStarter
 import com.camremote.core.port.LaunchSpec
 import com.camremote.core.port.ResolvedActivity
 import com.camremote.core.port.PermissionInspector
+import com.camremote.core.port.PermissionPrompt
 import com.camremote.core.protocol.ErrorCode
 import com.camremote.core.protocol.Params
 import com.camremote.core.protocol.PermissionStatus
@@ -61,7 +62,8 @@ class OpenCameraCommandTest {
     private fun command(
         starter: ActivityStarter,
         permissions: PermissionStatus = allGranted,
-    ) = OpenCameraCommand(starter, PermissionInspector { permissions })
+        permissionPrompt: PermissionPrompt = PermissionPrompt {},
+    ) = OpenCameraCommand(starter, PermissionInspector { permissions }, permissionPrompt)
 
     @Test
     fun `launches the camera app and reports what it launched`() = runTest {
@@ -157,8 +159,21 @@ class OpenCameraCommandTest {
         // with the fix beats firing an intent that the OS silently drops.
         val error = assertIs<Failure>(outcome).error
         assertEquals(ErrorCode.PRECONDITION_FAILED, error.code)
-        assertTrue(error.remediation!!.contains("Display over other apps"))
+        assertTrue(error.remediation!!.contains("retry"))
         assertEquals(null, device.started)
+    }
+
+    @Test
+    fun `prompts for the overlay permission as part of failing`() = runTest {
+        var prompted = false
+
+        command(
+            FakeDevice(),
+            allGranted.copy(canDrawOverlays = false),
+            permissionPrompt = PermissionPrompt { prompted = true },
+        ).execute(Params.EMPTY)
+
+        assertTrue(prompted)
     }
 
     @Test

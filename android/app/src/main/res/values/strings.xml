@@ -2,29 +2,6 @@
 <resources>
     <string name="app_name">cam-remote</string>
 
-    <string name="setup_title">cam-remote agent</string>
-    <string name="setup_subtitle">This device is controlled over the network. There is nothing to operate here — this screen only grants the permissions Android will not grant remotely.</string>
-
-    <string name="setup_server_switch">Agent running</string>
-    <string name="setup_address">Listening on %1$s:%2$d</string>
-    <string name="setup_address_off">Not listening</string>
-
-    <string name="setup_permissions_heading">Permissions</string>
-    <string name="setup_grant">Grant: %1$s</string>
-    <string name="setup_granted">Granted: %1$s</string>
-    <string name="setup_grant_camera">Camera</string>
-    <string name="setup_grant_notifications">Notifications</string>
-    <string name="setup_grant_overlay">Display over other apps</string>
-    <string name="setup_grant_battery">Ignore battery optimisation</string>
-    <string name="setup_overlay_explainer">"Display over other apps" is what allows a background service to open the camera app at all, and to use the camera after Android restarts the agent. Ignoring battery optimisation keeps the device answering once the screen is off.</string>
-    <string name="setup_ready">Setup is complete. Every command is available.</string>
-
-    <string name="setup_pairing_heading">Pairing</string>
-    <string name="setup_pair">Pair a control machine</string>
-    <string name="setup_pair_open">Pairing open — %1$d s</string>
-    <string name="setup_token">Token: %1$s</string>
-    <string name="setup_regenerate_token">Generate a new token</string>
-
     <string name="notification_channel_name">Agent</string>
     <string name="notification_channel_description">Shown while cam-remote is accepting commands.</string>
     <string name="notification_title">cam-remote is running</string>

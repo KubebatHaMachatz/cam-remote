@@ -7,6 +7,7 @@ import com.camremote.core.port.CameraController
 import com.camremote.core.port.CaptureRequest
 import com.camremote.core.port.CaptureResult
 import com.camremote.core.port.PermissionInspector
+import com.camremote.core.port.PermissionPrompt
 import com.camremote.core.port.PhotoStore
 import com.camremote.core.port.StoredPhoto
 import com.camremote.core.protocol.ErrorCode
@@ -80,11 +81,13 @@ class CapturePhotoCommandTest {
         photos: PhotoStore = FakePhotoStore(),
         permissions: PermissionStatus = allGranted,
         nowMillis: Long = 1_699_999_999_123,
+        permissionPrompt: PermissionPrompt = PermissionPrompt {},
     ) = CapturePhotoCommand(
         camera = camera,
         photos = photos,
         permissions = PermissionInspector { permissions },
         clock = { nowMillis },
+        permissionPrompt = permissionPrompt,
     )
 
     @Test
@@ -134,8 +137,29 @@ class CapturePhotoCommandTest {
 
         val error = assertIs<Failure>(outcome).error
         assertEquals(ErrorCode.PERMISSION_DENIED, error.code)
-        assertTrue(error.remediation!!.contains("setup"))
+        assertTrue(error.remediation!!.contains("retry"))
         assertEquals(null, camera.request)
+    }
+
+    @Test
+    fun `prompts for the camera permission as part of failing, so the human is asked right then`() = runTest {
+        var prompted = false
+
+        command(permissions = allGranted.copy(camera = false), permissionPrompt = PermissionPrompt { prompted = true })
+            .execute(Params.EMPTY)
+
+        // There is no setup screen; the only known moment a human might be looking at the phone is
+        // right after a command has just failed, so the request happens as part of that failure.
+        assertTrue(prompted)
+    }
+
+    @Test
+    fun `does not prompt when the permission is already granted`() = runTest {
+        var prompted = false
+
+        command(permissionPrompt = PermissionPrompt { prompted = true }).execute(Params.EMPTY)
+
+        assertEquals(false, prompted)
     }
 
     @Test
