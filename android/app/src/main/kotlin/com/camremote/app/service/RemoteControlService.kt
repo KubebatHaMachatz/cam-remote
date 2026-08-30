@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
 import androidx.lifecycle.LifecycleService
 import com.camremote.app.R
+import com.camremote.app.adapter.LocalAddresses
 import com.camremote.app.adapter.NsdServiceAdvertiser
 import com.camremote.app.di.AppContainer
 import com.camremote.app.setup.LaunchActivity
@@ -117,7 +118,13 @@ class RemoteControlService : LifecycleService() {
     private fun startInForeground() {
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
-            .setContentText(getString(R.string.notification_text, container.config.port))
+            .setContentText(
+                getString(
+                    R.string.notification_text,
+                    LocalAddresses.firstLanIpv4() ?: getString(R.string.notification_no_address),
+                    container.config.port,
+                ),
+            )
             .setSmallIcon(R.drawable.ic_agent_notification)
             .setOngoing(true)
             .setContentIntent(
