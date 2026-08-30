@@ -211,9 +211,8 @@ class CaptureTest(CliTestCase):
                 "door",
                 "--quality",
                 "70",
-                "--gallery",
                 "--path",
-                "/sdcard/x",
+                "reports",
                 client=client,
             )
 
@@ -221,8 +220,7 @@ class CaptureTest(CliTestCase):
             {
                 "filename": "door",
                 "jpegQuality": 70,
-                "publishToGallery": True,
-                "path": "/sdcard/x",
+                "path": "reports",
             },
             client.calls[0][1],
         )

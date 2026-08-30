@@ -43,17 +43,15 @@ def _configure_capture(parser: argparse.ArgumentParser) -> None:
         help="Where to save the photo on this machine (default: ./shots).",
     )
     parser.add_argument("--filename", help="Name for the file on the device.")
-    parser.add_argument("--path", help="Destination directory on the device.")
+    parser.add_argument(
+        "--path",
+        help="Destination directory on the device, relative to Documents (default: cam-remote).",
+    )
     parser.add_argument(
         "--quality",
         type=int,
         metavar="1-100",
         help="JPEG quality (default: the agent's, 95).",
-    )
-    parser.add_argument(
-        "--gallery",
-        action="store_true",
-        help="Also index the photo in the device gallery.",
     )
     parser.add_argument(
         "--no-download",
@@ -75,9 +73,6 @@ def _capture(context: Context) -> int:
         params["filename"] = context.args.filename
     if context.args.quality is not None:
         params["jpegQuality"] = context.args.quality
-    if context.args.gallery:
-        params["publishToGallery"] = True
-
     response = context.agent.invoke("camera.capture", params or None)
     data = dict(response.data)
 
