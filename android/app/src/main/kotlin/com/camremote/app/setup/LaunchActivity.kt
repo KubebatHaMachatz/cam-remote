@@ -131,6 +131,15 @@ class LaunchActivity : ComponentActivity() {
             return
         }
 
+        // Started again now that the answers are in. A foreground service's types are fixed at the
+        // moment startForeground is called, and the service was started at onCreate -- before the
+        // camera dialog. Granting the camera permission a moment later does not retrofit the
+        // 'camera' type onto a service already running without it, and from API 34 a service
+        // lacking that type may not touch the sensor: the first camera.capture would time out for
+        // no visible reason on a device the user had just finished setting up. onStartCommand
+        // re-asserts the types, so this costs one intent and closes that window.
+        RemoteControlService.start(this)
+
         finish()
     }
 
