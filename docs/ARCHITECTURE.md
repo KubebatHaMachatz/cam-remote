@@ -53,7 +53,7 @@ transport tests drive real commands rather than re-inventing doubles.
 |---|---|
 | `transport.http` | `commandApi` (the routes) and `HttpCommandServer` (the Ktor engine's lifetime). |
 | `adapter` | Every port's Android implementation, plus `LocalAddresses`. |
-| `service` | `RemoteControlService` — foreground service, `LifecycleOwner`, owner of the HTTP server — and `BootReceiver`. |
+| `service` | `RemoteControlService` — foreground service, `LifecycleOwner`, owner of the HTTP server, and the notification that both reports the agent's address and stops it — plus `BootReceiver`. |
 | `setup` | `LaunchActivity`, the app's only screen. Draws nothing of its own — see below. |
 | `config` | `ServerConfig`: port and whether the agent has ever been started, in private preferences. |
 | `di` | `AppContainer`: the whole composition, and the command catalog. |
