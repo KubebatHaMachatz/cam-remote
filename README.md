@@ -195,6 +195,7 @@ new transport rather than a new feature, and
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The layout of the code and the path a request takes through it |
 | [docs/EXTENDING.md](docs/EXTENDING.md) | Adding a command, adding a transport, swapping an implementation |
 | [docs/DEVICES.md](docs/DEVICES.md) | What varies between handsets, per-OEM notes, and how to diagnose a new one |
+| [docs/INSTRUCTIONS.md](docs/INSTRUCTIONS.md) | Manual testing walkthrough — every `camremote` command with expected output and how to verify it |
 
 ## Repository layout
 
