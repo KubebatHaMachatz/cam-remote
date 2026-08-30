@@ -133,6 +133,21 @@ most of them surprising:
 - Knox-managed devices may block the overlay permission by policy. On those, `camera.capture`,
   `device.getprop` and `system.status` still work, and `camera.open` reports `PRECONDITION_FAILED`
   accurately.
+- **Discovery does not work here except immediately after the agent starts.** The registration
+  itself is fine — `NsdServiceAdvertiser` logs `Advertising cam-remote samsung SM-S921B on
+  _camremote._tcp port 8099`, and One UI announces the record on registration — but the device then
+  answers no `_camremote._tcp` query at all. Measured with the client's own sockets: 123 mDNS
+  packets received in fifteen seconds, **none of them from the handset**, while `--host` worked
+  every time. So `camremote discover` finds it within a few seconds of the app starting and
+  effectively never afterwards. Neither a QU nor a plain QM query changes it, and neither does the
+  multicast lock the agent now holds.
+
+  It is most likely One UI suppressing the responder for a backgrounded app, of a piece with the
+  "Sleeping apps" behaviour below, but that is not proven. Until it is, treat discovery on this
+  handset as best-effort: `--host` is not a fallback here so much as the supported route, and
+  `camremote discover` is worth running only right after opening the app. Restarting the app on the
+  phone is a reliable way to make it discoverable for a demo.
+
 - **Testing the on-demand prompt via repeated `adb shell pm revoke`/`am force-stop` cycles is
   misleading.** After several rapid denials in a row, Android silently auto-resolves the next
   `requestPermissions()` call with no dialog at all — the standard anti-dialog-spam heuristic, not a
@@ -266,12 +281,50 @@ ending it, because a diagnostic that only runs on healthy devices is not much us
 Then, if something specific needs pinning down:
 
 ```bash
-camremote discover              # if silent, the network blocks multicast -- use --host
+camremote discover              # if silent, see below before blaming the network
 camremote status                # names every missing permission
 camremote camera-apps           # every camera app, and which one would be chosen
 camremote --json open-camera    # 'strategy' says which intent the device answered
 camremote take-picture          # independent of the camera app entirely
 ```
+
+## When discovery finds nothing
+
+`camremote discover` going quiet is usually read as "this network blocks multicast", and that is
+often true — but three other things caused it during development, and all three look identical from
+the outside. Work down this list before blaming the access point.
+
+**Is the agent actually reachable?** This separates "cannot be found" from "is not running", and
+costs one command:
+
+```bash
+curl -s http://<device-ip>:8099/v1/health
+```
+
+**Does the host's own resolver see it?** On macOS, `dns-sd` is an independent second opinion:
+
+```bash
+dns-sd -B _camremote._tcp local
+```
+
+If `dns-sd` finds it and `camremote discover` does not, the fault is the client, not the network.
+Note that `dns-sd` answers from `mDNSResponder`'s cache, so a hit does not prove the handset is
+answering *now* — a point that cost an afternoon.
+
+**Is the responder answering, or only announcing?** Restart the app on the handset and run
+`camremote discover` within a few seconds. If it is found then but not a minute later, the device is
+announcing on registration and ignoring queries afterwards — see the One UI note above.
+
+Two client-side bugs behind this are worth knowing, because both are easy to reintroduce:
+
+- **Listening only for a unicast reply is not enough.** Queries set the QU bit, but RFC 6762 §5.4
+  lets a responder answer by multicast anyway if it has not multicast that record recently, and
+  Android's responder does exactly that. The client listens on both its own port and the group.
+- **Joining the multicast group on `INADDR_ANY` can receive nothing at all.** On macOS the kernel
+  picks a default interface that need not be the one carrying mDNS. Measured on a Mac with one
+  active Wi-Fi interface: an `INADDR_ANY` join received **0 packets in twelve seconds**, while a
+  join pinned to that same interface received **63**. The client now resolves the interface and
+  pins both sockets to it.
 
 ## Adding a device to the matrix
 
