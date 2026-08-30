@@ -40,6 +40,7 @@ class RemoteControlService : LifecycleService() {
     private var server: HttpCommandServer? = null
     private var advertiser: NsdServiceAdvertiser? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private var multicastLock: WifiManager.MulticastLock? = null
 
     /** Builds the container and the notification channel before anything can be started. */
     override fun onCreate() {
@@ -67,6 +68,7 @@ class RemoteControlService : LifecycleService() {
         advertiser?.stop()
         server?.stop()
         releaseWifiLock()
+        releaseMulticastLock()
         super.onDestroy()
     }
 
@@ -92,6 +94,7 @@ class RemoteControlService : LifecycleService() {
         }.also { it.start() }
 
         acquireWifiLock()
+        acquireMulticastLock()
 
         advertiser = NsdServiceAdvertiser(applicationContext).also {
             val device = container.deviceDescription()
@@ -193,6 +196,33 @@ class RemoteControlService : LifecycleService() {
         wifiLock = null
     }
 
+    /**
+     * Lets the agent hear multicast, which is what makes it discoverable.
+     *
+     * Wi-Fi hardware drops inbound multicast that is not addressed to this device unless a lock is
+     * held, so without this the agent announces itself on registration -- an outbound packet, which
+     * is unaffected -- and is then deaf to every `_camremote._tcp` query that follows. A client
+     * that happens to be listening during an announcement finds it; one that asks a moment later
+     * does not, which looks exactly like a network blocking multicast.
+     *
+     * This is what `CHANGE_WIFI_MULTICAST_STATE` in the manifest is for. The permission was
+     * declared from the start; the lock it gates was not taken.
+     */
+    private fun acquireMulticastLock() {
+        if (multicastLock != null) return
+        val wifi = applicationContext.getSystemService<WifiManager>() ?: return
+        multicastLock = wifi.createMulticastLock(MULTICAST_LOCK_TAG).apply {
+            setReferenceCounted(false)
+            acquire()
+        }
+    }
+
+    /** Drops the multicast lock, if one is held. */
+    private fun releaseMulticastLock() {
+        multicastLock?.takeIf { it.isHeld }?.release()
+        multicastLock = null
+    }
+
     /** Registers the low-importance channel the ongoing notification belongs to. */
     private fun createNotificationChannel() {
         val channel = NotificationChannel(
@@ -211,6 +241,7 @@ class RemoteControlService : LifecycleService() {
         private const val CHANNEL_ID = "cam-remote-agent"
         private const val NOTIFICATION_ID = 1
         private const val WIFI_LOCK_TAG = "cam-remote:agent"
+        private const val MULTICAST_LOCK_TAG = "cam-remote:mdns"
 
         /** Starts the agent. Safe to call when it is already running. */
         fun start(context: Context) {
