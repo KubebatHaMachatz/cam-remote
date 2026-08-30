@@ -2,15 +2,13 @@ package com.camremote.app.di
 
 import android.content.Context
 import android.os.Build
-import android.os.Environment
 import androidx.lifecycle.LifecycleOwner
 import com.camremote.app.adapter.AndroidPermissionInspector
 import com.camremote.app.adapter.AndroidPermissionPrompt
 import com.camremote.app.adapter.CameraXController
 import com.camremote.app.adapter.ExecGetPropReader
-import com.camremote.app.adapter.FileSystemPhotoStore
 import com.camremote.app.adapter.IntentActivityStarter
-import com.camremote.app.adapter.MediaStoreGalleryPublisher
+import com.camremote.app.adapter.MediaStorePhotoStore
 import com.camremote.app.adapter.SystemPropertiesReader
 import com.camremote.app.config.ServerConfig
 import com.camremote.core.command.Command
@@ -70,23 +68,21 @@ class AppContainer private constructor(private val context: Context) {
     }
 
     /**
-     * Captures land in the app's own external directory, which needs no storage permission from
-     * API 29 and is removed cleanly when the app is uninstalled. The public Pictures directory is
-     * additionally allowed so an operator can ask for somewhere they can find on the device.
+     * Captures land in the user's own `Documents/cam-remote`, reachable from any file manager.
+     *
+     * Under scoped storage an app may create files it owns anywhere in shared storage with no
+     * storage permission at all, so none is declared or requested; `minSdk` is 29 so that this
+     * holds on every device the app will run on. See `docs/DESIGN.md` section 8.
+     *
+     * The scratch directory is in the cache, because its files exist only between the shutter
+     * firing and the copy into Documents completing, and Android is welcome to reclaim any that a
+     * crash leaves behind. The index is not: it must survive, so it lives in `filesDir`.
      */
     val photos: PhotoStore by lazy {
-        val appPictures = File(
-            context.getExternalFilesDir(Environment.DIRECTORY_PICTURES) ?: context.filesDir,
-            "cam-remote",
-        )
-        FileSystemPhotoStore(
-            defaultRoot = appPictures,
-            allowedRoots = listOfNotNull(
-                appPictures,
-                context.getExternalFilesDir(null),
-                context.filesDir,
-            ),
-            gallery = MediaStoreGalleryPublisher(context),
+        MediaStorePhotoStore(
+            context = context,
+            scratchDirectory = File(context.cacheDir, "captures"),
+            indexFile = File(context.filesDir, "photo-index.jsonl"),
         )
     }
 

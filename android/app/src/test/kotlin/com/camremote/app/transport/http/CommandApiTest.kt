@@ -50,9 +50,15 @@ class CommandApiTest {
 
     /** The media route has its own test; here it only has to exist. */
     private val noPhotos = object : PhotoStore {
-        override fun destinationFor(directory: String?, filename: String) = "/unused"
-        override fun record(path: String, capturedAtMillis: Long): StoredPhoto = error("not used here")
-        override fun publish(photo: StoredPhoto): String? = null
+        override fun scratchPathFor(filename: String) = "/unused"
+        override fun publish(
+            scratchPath: String,
+            relativeDirectory: String,
+            filename: String,
+            capturedAtMillis: Long,
+        ): StoredPhoto = error("not used here")
+
+        override fun discard(scratchPath: String) = Unit
         override fun open(id: String): OpenPhoto? = null
     }
 

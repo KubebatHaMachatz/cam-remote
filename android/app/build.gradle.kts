@@ -14,7 +14,7 @@ android {
         applicationId = "com.camremote.app"
         // API 26 covers effectively every device still in service and is the floor for the
         // foreground-service and scoped-storage behaviour this agent relies on.
-        minSdk = 26
+        minSdk = 29
         targetSdk = 37
         versionCode = 1
         versionName = "1.0"

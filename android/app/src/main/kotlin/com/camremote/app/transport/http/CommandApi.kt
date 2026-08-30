@@ -88,7 +88,7 @@ fun Application.commandApi(
                 return@get
             }
 
-            val filename = opened.photo.path.substringAfterLast('/')
+            val filename = opened.photo.displayPath.substringAfterLast('/')
             call.response.header(
                 HttpHeaders.ContentDisposition,
                 ContentDisposition.Attachment

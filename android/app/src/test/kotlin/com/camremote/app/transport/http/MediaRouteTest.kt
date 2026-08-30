@@ -25,14 +25,21 @@ class MediaRouteTest {
     private val bytes = byteArrayOf(0xFF.toByte(), 0xD8.toByte(), 1, 2, 3, 0xFF.toByte(), 0xD9.toByte())
 
     private val photos = object : PhotoStore {
-        override fun destinationFor(directory: String?, filename: String) = "/unused"
-        override fun record(path: String, capturedAtMillis: Long) = error("not used here")
-        override fun publish(photo: StoredPhoto): String? = null
+        override fun scratchPathFor(filename: String) = "/unused"
+        override fun publish(
+            scratchPath: String,
+            relativeDirectory: String,
+            filename: String,
+            capturedAtMillis: Long,
+        ): StoredPhoto = error("not used here")
+
+        override fun discard(scratchPath: String) = Unit
         override fun open(id: String): OpenPhoto? = if (id == "known-id") {
             OpenPhoto(
                 photo = StoredPhoto(
                     id = "known-id",
-                    path = "/data/pictures/camremote-20231114-221319-123.jpg",
+                    uri = "content://media/external/file/42",
+                    displayPath = "Documents/cam-remote/camremote-20231114-221319-123.jpg",
                     sizeBytes = bytes.size.toLong(),
                     capturedAtMillis = 0,
                 ),
