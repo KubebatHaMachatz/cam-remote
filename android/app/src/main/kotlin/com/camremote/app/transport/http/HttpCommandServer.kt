@@ -12,9 +12,11 @@ import io.ktor.server.engine.embeddedServer
  * needs a test of its own — this class is start, stop, and the choice of bind address.
  *
  * It binds every interface, because the entire point is that a control machine elsewhere on the
- * Wi-Fi can reach it. That exposure is why the token is mandatory, why the server only runs while
- * the user has switched it on, and why the README says plainly what joining an untrusted network
- * with this running would mean.
+ * Wi-Fi can reach it. Nothing authenticates against it: the agent assumes one app and one client on
+ * a trusted LAN, which is the assignment's own framing and is argued for in `docs/DESIGN.md` §7.
+ * That makes the exposure real rather than theoretical, which is why the README states plainly what
+ * joining an untrusted network with this running would mean, and why an authenticating transport is
+ * the first thing `docs/EXTENDING.md` would have you add.
  */
 class HttpCommandServer(
     private val port: Int,

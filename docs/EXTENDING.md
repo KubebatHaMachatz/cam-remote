@@ -214,8 +214,105 @@ To add a third, write the class, put it in the list, and write a test with the o
 `GetPropCommand` does not change, because it never knew which one it was talking to.
 
 The same shape applies to the rest: give `CameraController` a Camera2 implementation, give
-`PhotoStore` a MediaStore-only one, give `ActivityStarter` a no-op for testing. Each is one class and
-one line in `AppContainer`.
+`PhotoStore` a SAF-backed one that writes wherever the user picked with `ACTION_OPEN_DOCUMENT_TREE`,
+give `ActivityStarter` a no-op for testing. Each is one class and one line in `AppContainer`.
+
+---
+
+## Adding authentication
+
+There is none, deliberately. The agent assumes one app and one client on a trusted LAN — the
+assignment's own framing — and `docs/DESIGN.md` §7 argues the trade rather than hiding it. It is
+also the **first thing to change for any broader use**, so this is what that costs.
+
+The short version: it is confined to the transport, because that is where it belongs.
+
+### The agent side
+
+A shared secret belongs with the rest of the agent's settings, generated once:
+
+```kotlin
+// ServerConfig.kt
+val token: String
+    get() = prefs.getString(KEY_TOKEN, null) ?: newToken().also {
+        prefs.edit().putString(KEY_TOKEN, it).apply()
+    }
+
+/** 256 bits from a CSPRNG. Not a UUID: those are not required to be unpredictable. */
+private fun newToken(): String = ByteArray(32)
+    .also(SecureRandom()::nextBytes)
+    .let { Base64.encodeToString(it, Base64.URL_SAFE or Base64.NO_WRAP or Base64.NO_PADDING) }
+```
+
+Then one interceptor in `commandApi`, which already takes its dependencies by parameter:
+
+```kotlin
+fun Application.commandApi(
+    dispatcher: CommandDispatcher,
+    photos: PhotoStore,
+    device: DeviceDescription,
+    token: String,
+) {
+    intercept(ApplicationCallPipeline.Plugins) {
+        // /v1/health stays open: discovery has to be able to identify an agent before it can
+        // possibly know its secret.
+        if (call.request.path() == "/v1/health") return@intercept
+
+        val presented = call.request.header(HttpHeaders.Authorization)
+            ?.removePrefix("Bearer ")
+            .orEmpty()
+
+        // Constant-time. A naive == leaks the token one character at a time to anyone willing to
+        // measure, and on a LAN they can measure.
+        if (!MessageDigest.isEqual(presented.toByteArray(), token.toByteArray())) {
+            call.respondError(HttpStatusCode.Unauthorized, ErrorCode.UNAUTHORIZED, …)
+            finish()
+        }
+    }
+    …
+}
+```
+
+Three things that are easy to get wrong:
+
+- **`/v1/media/{id}` must be covered too.** It is the route that hands out photographs, and it is the
+  one people forget because it is not the command route. Intercepting the pipeline rather than
+  decorating one handler is what makes forgetting impossible.
+- **Compare in constant time.** `MessageDigest.isEqual`, not `==`.
+- **Restore `ErrorCode.UNAUTHORIZED`.** It was removed with the auth layer; protocol failures use
+  HTTP status *and* a typed code, and the Python client maps 401 back to a typed failure.
+
+### The client side
+
+One header in `HttpTransport`, and the token in `~/.camremote.toml` next to the host and port:
+
+```python
+if self._token:
+    request.add_header("Authorization", f"Bearer {self._token}")
+```
+
+`config.save()` should then `chmod 0600` — it did exactly that until the secret went away.
+
+### How the secret gets there
+
+This is the genuinely hard part, and the reason the project does not have one: with no adb in the
+product and no UI, there is nowhere to display a token and nothing to type it into. Three answers,
+in ascending order of effort:
+
+1. **Show it in the persistent notification**, which already exists and already displays the
+   address. Read it off the phone once.
+2. **A pairing window**: a `POST /v1/pair` that returns the token only during a short interval the
+   user opens from the device. This is what the project did before `v1`, and the git history has the
+   whole implementation if it is wanted back.
+3. **Trust on first use**: the agent accepts the first client it ever sees and pins it. No user
+   interaction at all, and a meaningful weakening on a hostile network.
+
+### What does not change
+
+`:core`, every command, the dispatcher, the Python command modules, and the CLI. Authentication is a
+property of a transport, not of the application, and the module boundary makes that a fact about the
+build graph rather than a promise. An MQTT transport added later brings its own credentials and
+none of this applies to it.
 
 ---
 
@@ -226,6 +323,7 @@ one line in `AppContainer`.
 | What a command does | `core/command/impl/` | Everything else |
 | How the device does it | `app/adapter/` | The command |
 | How commands arrive | `app/transport/` | The dispatcher, the commands |
+| Who may issue a command | `app/transport/http/CommandApi.kt` | `:core`, every command |
 | Which failures mean what | `core/protocol/ErrorCode` | The transports |
 | What the CLI prints | `python/camremote/commands/` | The agent |
 | What is wired to what | `app/di/AppContainer.kt` | The classes being wired |
