@@ -36,7 +36,7 @@ def json_response(payload, status=200, headers=None):
     return Response(status=status, body=json.dumps(payload).encode(), headers=headers or {})
 
 
-def command_ok(command="system.ping", data=None):
+def command_ok(command="system.status", data=None):
     return json_response(
         {
             "id": "generated",
@@ -53,12 +53,12 @@ class InvokeTest(unittest.TestCase):
 
     def test_posts_the_command_envelope(self):
         transport = FakeTransport(command_ok())
-        RemoteClient(transport).invoke("system.ping")
+        RemoteClient(transport).invoke("system.status")
 
         method, path, body = transport.requests[0]
         self.assertEqual(("POST", "/v1/command"), (method, path))
         sent = json.loads(body)
-        self.assertEqual("system.ping", sent["command"])
+        self.assertEqual("system.status", sent["command"])
         self.assertTrue(sent["id"], "a correlation id is always sent")
 
     def test_sends_params_when_given(self):
@@ -75,7 +75,7 @@ class InvokeTest(unittest.TestCase):
         # the operator actually asked for.
         transport = FakeTransport(command_ok())
 
-        RemoteClient(transport).invoke("system.ping")
+        RemoteClient(transport).invoke("system.status")
 
         self.assertNotIn("params", json.loads(transport.requests[0][2]))
 
@@ -83,8 +83,8 @@ class InvokeTest(unittest.TestCase):
         transport = FakeTransport(command_ok(), command_ok())
         client = RemoteClient(transport)
 
-        client.invoke("system.ping")
-        client.invoke("system.ping")
+        client.invoke("system.status")
+        client.invoke("system.status")
 
         ids = [json.loads(request[2])["id"] for request in transport.requests]
         self.assertNotEqual(ids[0], ids[1])
@@ -92,7 +92,7 @@ class InvokeTest(unittest.TestCase):
     def test_returns_the_parsed_response(self):
         transport = FakeTransport(command_ok(data={"pong": True}))
 
-        response = RemoteClient(transport).invoke("system.ping")
+        response = RemoteClient(transport).invoke("system.status")
 
         self.assertTrue(response.ok)
         self.assertEqual({"pong": True}, dict(response.data))
@@ -126,7 +126,7 @@ class InvokeTest(unittest.TestCase):
         transport = FakeTransport(Response(status=200, body=b"<html>hello</html>"))
 
         with self.assertRaises(TransportError):
-            RemoteClient(transport).invoke("system.ping")
+            RemoteClient(transport).invoke("system.status")
 
 
 class HealthTest(unittest.TestCase):
