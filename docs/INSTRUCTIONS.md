@@ -136,6 +136,13 @@ same arrangement as `commands`: the device is the authority on its own capabilit
 Run this first after any setup change — it is the fastest way to confirm a permission grant actually
 took effect before testing the command that depends on it.
 
+The round-trip figure should be small on the same LAN — single digits to low double digits of
+milliseconds. Seconds means a Wi-Fi problem rather than an agent problem. The clock line compares
+the handset against this machine and says only that the two disagree, never which is wrong; a
+handset an hour out writes capture timestamps that make no sense a week later, and this is the
+cheapest place to notice. Anything within five seconds reads as *in step*, because below that the
+difference cannot be told from the round trip that measured it.
+
 ```bash
 ./scripts/camremote --host 10.0.0.4 --json status
 ```
@@ -143,32 +150,7 @@ gives the same information as raw JSON, for a script that wants to assert on it.
 
 ---
 
-## 3. `system-ping` — liveness and clock check
-
-```bash
-./scripts/camremote --host 10.0.0.4 system-ping
-```
-
-**Expected output:**
-
-```
-Agent responded in 2 ms (device clock 1787944763154)
-```
-
-**How to verify:** the round-trip time should be small (single-digit to low-double-digit
-milliseconds) on the same LAN — anything in the seconds suggests a Wi-Fi problem, not an agent
-problem. Convert the millisecond timestamp to a date to sanity-check the phone's clock:
-
-```bash
-python3 -c "import datetime; print(datetime.datetime.fromtimestamp(1787944763154/1000))"
-```
-
-It should print roughly the current date and time. A wildly wrong clock explains confusing capture
-timestamps later.
-
----
-
-## 4. `commands` — the live command catalog
+## 3. `commands` — the live command catalog
 
 ```bash
 ./scripts/camremote --host 10.0.0.4 commands
@@ -189,7 +171,6 @@ device.getprop - Read one or more Android system properties.
     key (string, optional): A single property name, e.g. ro.product.model.
     keys (string_list, optional): Several property names to read in one request...
 system.commands - List every command this agent supports, with its parameters.
-system.ping - Check that the agent is reachable and report the device clock.
 system.status - Report the device, its permissions, and whether the agent is fully set up.
 ```
 
@@ -203,7 +184,7 @@ should appear here automatically. That is the extensibility claim; this command 
 
 ---
 
-## 5. `getprop` — the assignment's property-fetch requirement
+## 4. `getprop` — the assignment's property-fetch requirement
 
 ```bash
 ./scripts/camremote --host 10.0.0.4 getprop ro.product.model
@@ -264,7 +245,7 @@ half of the assignment for this command.
 
 ---
 
-## 6. `open-camera` — the assignment's "open a camera" requirement
+## 5. `open-camera` — the assignment's "open a camera" requirement
 
 ```bash
 ./scripts/camremote --host 10.0.0.4 open-camera
@@ -286,7 +267,7 @@ expect from a given OEM.
 ./scripts/camremote --host 10.0.0.4 --json open-camera
 ```
 adds `strategy` and `preinstalled`/`defaultHandler` fields — useful when comparing behaviour across
-devices; see [`camera-apps`](#7-camera-apps--diagnose-which-camera-app-would-be-chosen) below for the
+devices; see [`camera-apps`](#6-camera-apps--diagnose-which-camera-app-would-be-chosen) below for the
 full picture without actually opening anything.
 
 **With a lens hint:**
@@ -311,7 +292,7 @@ apps, or tap the app's icon to be walked through it), then retry.
 
 ---
 
-## 7. `camera-apps` — diagnose which camera app would be chosen
+## 6. `camera-apps` — diagnose which camera app would be chosen
 
 ```bash
 ./scripts/camremote --host 10.0.0.4 camera-apps
@@ -336,7 +317,7 @@ picked without triggering a launch.
 
 ---
 
-## 8. `take-picture` — the assignment's rear-camera capture requirement
+## 7. `take-picture` — the assignment's rear-camera capture requirement
 
 This is the command that most needs the resulting file inspected, not just the terminal output.
 
@@ -442,7 +423,7 @@ home button) and retry — it should now succeed in a couple of seconds.
 
 ---
 
-## 9. `device-report` — everything about a device in one go
+## 8. `device-report` — everything about a device in one go
 
 ```bash
 ./scripts/camremote --host 10.0.0.4 device-report --out matrix/my-device.json
@@ -477,7 +458,7 @@ file:
 
 ---
 
-## 10. Watching what the device did
+## 9. Watching what the device did
 
 Everything so far reads the agent's answer. This reads the agent's own account, which is the other
 half — and the half that is still there tomorrow.
@@ -511,7 +492,7 @@ product: nothing about controlling the agent requires a cable.
 
 ---
 
-## 11. Verifying failure paths deliberately
+## 10. Verifying failure paths deliberately
 
 A command that only ever succeeds hasn't been tested. These are worth running once to confirm the
 agent's error-reporting behaves as documented, not just its happy path.
@@ -520,7 +501,7 @@ agent's error-reporting behaves as documented, not just its happy path.
 command, with no token, code or handshake to present:
 
 ```bash
-./scripts/camremote --host 10.0.0.4 system-ping
+./scripts/camremote --host 10.0.0.4 status
 ```
 
 should succeed on a machine that has never run `camremote` before, with nothing but the address to

@@ -39,7 +39,7 @@ the singletons. The one activity the app has, `LaunchActivity`, draws nothing of
 solely to host native Android dialogs — so it has no state worth a ViewModel either.
 
 **Rejected: full Clean Architecture.** Use cases, repositories, mappers, and domain/data/presentation
-layering would be a great deal of structure for seven commands, and a reviewer would be right to read
+layering would be a great deal of structure for six commands, and a reviewer would be right to read
 it as cargo cult. Ports and adapters plus the Command pattern is the right *amount*. Knowing where to
 stop is part of the answer.
 
@@ -361,8 +361,8 @@ capability is a `test:` commit followed by a `feat:` commit.
 TDD only works on code that runs in milliseconds without a device — which is exactly what the
 hexagon delivers. All the decision-making lives in `:core` with no Android imports: target
 resolution, precondition checks, path validation, key sanitising, error mapping, filename
-generation, address ranking. Every port has a fake. That is 171 tests in `:core` that run in about a
-second, plus 10 in `:app` for the transport routes, and 48 for the Python client.
+generation, address ranking. Every port has a fake. That is 173 tests in `:core` that run in about a
+second, plus 10 in `:app` for the transport routes, and 55 for the Python client.
 
 The adapters left over are three-to-ten-line pass-throughs with no branching. `CameraAppLaunch` is
 the clearest case: a pure function produces a `LaunchSpec` — tested against the no-camera-app and

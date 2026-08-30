@@ -32,8 +32,8 @@ agent shows in its own notification; nothing had to be paired, saved or discover
 | 3. Fetch device property data | `camremote getprop KEY...` | Reads any number of properties in one round trip |
 | 4. Control application | `camremote` | Pure standard library; nothing to install |
 
-Plus `status`, `commands`, `camera-apps`, `device-report` and `system-ping` for inspecting and
-surveying an agent.
+Plus `status`, `commands`, `camera-apps` and `device-report` for inspecting and surveying an
+agent.
 
 ## No adb, no UI, no pairing code
 
@@ -177,8 +177,8 @@ it; `docs/DEVICES.md` covers those.
 ## Tests
 
 ```bash
-cd android && ./gradlew :core:test :app:testDebugUnitTest   # 181 unit tests
-cd python  && python3 -m unittest discover -s tests -t .    # 48 unit tests
+cd android && ./gradlew :core:test :app:testDebugUnitTest   # 183 unit tests
+cd python  && python3 -m unittest discover -s tests -t .    # 55 unit tests
 ```
 
 Both suites run on a desktop with no device attached and no packages installed. The Python tests use

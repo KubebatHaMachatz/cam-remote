@@ -64,7 +64,7 @@ In `android/app/src/main/kotlin/com/camremote/app/di/AppContainer.kt`:
 
 ```kotlin
     private fun commands(camera: CameraController, descriptors: …): List<Command> = listOf(
-        PingCommand(clock),
+        StatusCommand(permissions, ::deviceDescription, camera, clock),
         …
         CapturePhotoCommand(camera, photos, permissions, clock, permissionPrompt),
         RebootCommand(AndroidDeviceRebooter(context)),   // ← added
@@ -113,7 +113,7 @@ and one line in `python/camremote/commands/__init__.py`:
 
 ```python
 COMMANDS = (
-    STATUS, PING, LIST_COMMANDS, GETPROP,
+    STATUS, LIST_COMMANDS, GETPROP,
     OPEN_CAMERA, CAMERA_APPS, TAKE_PICTURE, DEVICE_REPORT, REBOOT,
 )
 ```

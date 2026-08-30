@@ -15,7 +15,7 @@ way, see [DESIGN.md](DESIGN.md).
                     │   lookup → lock → timeout → map errors   │
                     ├──────────────────────────────────────────┤
                     │   CommandRegistry → Command × 7          │   :core
-                    │   PingCommand  GetPropCommand  …         │   no Android
+                    │   StatusCommand  GetPropCommand  …       │   no Android
                     ├──────────────────────────────────────────┤
                     │   Ports:  CameraController  PhotoStore   │
                     │           ActivityStarter  PermissionPrompt│
@@ -40,7 +40,7 @@ authentication layer in this diagram because there is none in the app — see
 |---|---|
 | `protocol` | The wire format: `CommandRequest`, `CommandResponse`, `CommandError`, `ErrorCode`, `Params`, `CommandDescriptor`, and `ProtocolJson` — the one place JSON is configured. |
 | `command` | `Command`, `CommandRegistry`, `CommandDispatcher`, `ResourceLocks`, `DeviceResource`. |
-| `command.impl` | The seven capabilities: ping, status, commands, getprop, open camera, camera-apps, capture. |
+| `command.impl` | The six capabilities: status, commands, getprop, open camera, camera-apps, capture. |
 | `port` | What the core needs from the outside: `CameraController`, `PhotoStore`, `PropertyReader`, `ActivityStarter`, `PermissionInspector`, `PermissionPrompt`, `CommandLog`, `Clock`. |
 | `logic` | Pure decisions worth testing: `CameraAppLaunch`, `CameraAppChoice`, `PhotoPaths`, `PhotoNaming`, `PhotoIndex`, `PropertyKeys`, `GetPropOutput`, `FirstAvailablePropertyReader`, `LanAddresses`. |
 
@@ -147,9 +147,9 @@ Useful when deciding where a change belongs:
 
 | Suite | Count | Runs where |
 |---|---|---|
-| `:core` unit tests | 171 | Desktop JVM, no Android, about a second |
+| `:core` unit tests | 173 | Desktop JVM, no Android, about a second |
 | `:app` unit tests | 10 | Desktop JVM — the Ktor routes |
-| Python unit tests | 77 | Desktop, standard library only |
+| Python unit tests | 55 | Desktop, standard library only |
 | Instrumented | 7 | A real handset: real sensor, real MediaStore, real socket |
 
 The `:app` count fell by ten when captures moved to MediaStore, and that is the boundary working
