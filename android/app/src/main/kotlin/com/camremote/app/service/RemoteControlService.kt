@@ -1,11 +1,15 @@
 package com.camremote.app.service
 
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.net.ConnectivityManager
+import android.net.LinkProperties
+import android.net.Network
 import android.net.wifi.WifiManager
 import android.os.Build
 import android.os.IBinder
@@ -37,6 +41,10 @@ class RemoteControlService : LifecycleService() {
     private lateinit var container: AppContainer
     private var server: HttpCommandServer? = null
     private var wifiLock: WifiManager.WifiLock? = null
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+
+    /** The address currently on the notification, so an unchanged one is not redrawn. */
+    private var shownAddress: String? = null
 
     /** Builds the container and the notification channel before anything can be started. */
     override fun onCreate() {
@@ -54,14 +62,41 @@ class RemoteControlService : LifecycleService() {
      */
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+
+        if (intent?.action == ACTION_STOP) {
+            shutDown()
+            // Not sticky: an agent the operator has just switched off must not be handed back to
+            // them by the system a moment later.
+            return START_NOT_STICKY
+        }
+
         startInForeground()
         startServer()
         return START_STICKY
     }
 
+    /**
+     * Stops the agent for good, at the operator's request.
+     *
+     * Clearing the flag matters as much as stopping: [BootReceiver] restarts anything that was
+     * running before a reboot, so without this the agent would come back the next morning and
+     * "Terminate service" would read as a lie. Opening the app sets it again, which is the way
+     * back.
+     *
+     * Everything the service holds — the socket, the Wi-Fi lock — is released in `onDestroy`,
+     * which `stopSelf` leads to.
+     */
+    private fun shutDown() {
+        Log.i(TAG, "Terminating at the operator's request")
+        container.config.isEnabled = false
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     /** Releases everything the agent holds: the socket and the Wi-Fi lock. */
     override fun onDestroy() {
         server?.stop()
+        stopWatchingForAddressChanges()
         releaseWifiLock()
         super.onDestroy()
     }
@@ -88,6 +123,7 @@ class RemoteControlService : LifecycleService() {
         }.also { it.start() }
 
         acquireWifiLock()
+        watchForAddressChanges()
 
         Log.i(TAG, "cam-remote agent listening on port $port")
     }
@@ -98,12 +134,27 @@ class RemoteControlService : LifecycleService() {
      * Required for the agent to survive at all, and — from API 34 — for it to touch the camera.
      */
     private fun startInForeground() {
-        val notification = NotificationCompat.Builder(this, CHANNEL_ID)
+        val notification = buildNotification()
+
+        // A type may only be passed if the <service> element declares it, so "no type at all" is
+        // the honest answer below API 34 when the camera permission is still missing.
+        val types = foregroundServiceTypes()
+        if (types == 0) {
+            startForeground(NOTIFICATION_ID, notification)
+        } else {
+            startForeground(NOTIFICATION_ID, notification, types)
+        }
+    }
+
+    /** The ongoing notification, carrying whatever address the device answers on right now. */
+    private fun buildNotification(): Notification {
+        shownAddress = LocalAddresses.firstLanIpv4()
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(
                 getString(
                     R.string.notification_text,
-                    LocalAddresses.firstLanIpv4() ?: getString(R.string.notification_no_address),
+                    shownAddress ?: getString(R.string.notification_no_address),
                     container.config.port,
                 ),
             )
@@ -120,16 +171,72 @@ class RemoteControlService : LifecycleService() {
                     PendingIntent.FLAG_IMMUTABLE,
                 ),
             )
+            .addAction(
+                // No icon: from API 24 the standard notification template does not draw one, and
+                // inventing a drawable to be ignored is not worth the asset.
+                0,
+                getString(R.string.notification_stop),
+                PendingIntent.getService(
+                    this,
+                    STOP_REQUEST_CODE,
+                    Intent(this, RemoteControlService::class.java).setAction(ACTION_STOP),
+                    PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
             .build()
+    }
 
-        // A type may only be passed if the <service> element declares it, so "no type at all" is
-        // the honest answer below API 34 when the camera permission is still missing.
-        val types = foregroundServiceTypes()
-        if (types == 0) {
-            startForeground(NOTIFICATION_ID, notification)
-        } else {
-            startForeground(NOTIFICATION_ID, notification, types)
+    /**
+     * Watches for the device's address changing under it, and redraws the notification when it does.
+     *
+     * The notification is the only place an operator can learn where to point `--host`, so an
+     * address that has silently moved makes the one source of truth wrong. DHCP reassigns handsets
+     * more often than one would guess — this one moved three times in an afternoon — and the
+     * symptom is a command failing with "connection refused" against an address the phone itself is
+     * still displaying.
+     */
+    private fun watchForAddressChanges() {
+        if (networkCallback != null) return
+        val connectivity = applicationContext.getSystemService<ConnectivityManager>() ?: return
+
+        val callback = object : ConnectivityManager.NetworkCallback() {
+            /** Fires when an interface gains, loses or changes an address — the case that matters. */
+            override fun onLinkPropertiesChanged(network: Network, linkProperties: LinkProperties) {
+                refreshNotification()
+            }
+
+            override fun onAvailable(network: Network) = refreshNotification()
+
+            override fun onLost(network: Network) = refreshNotification()
         }
+
+        runCatching { connectivity.registerDefaultNetworkCallback(callback) }
+            .onSuccess { networkCallback = callback }
+            .onFailure { Log.w(TAG, "Could not watch for address changes", it) }
+    }
+
+    /** Stops watching, if we started. */
+    private fun stopWatchingForAddressChanges() {
+        val callback = networkCallback ?: return
+        networkCallback = null
+        runCatching {
+            applicationContext.getSystemService<ConnectivityManager>()
+                ?.unregisterNetworkCallback(callback)
+        }
+    }
+
+    /**
+     * Reposts the notification, but only when the address has actually changed.
+     *
+     * Network callbacks fire freely — a captive-portal probe or a route change is enough — and
+     * reposting an identical notification on each one would be churn the user can see.
+     */
+    private fun refreshNotification() {
+        if (LocalAddresses.firstLanIpv4() == shownAddress) return
+        runCatching {
+            getSystemService<NotificationManager>()?.notify(NOTIFICATION_ID, buildNotification())
+            Log.i(TAG, "Address changed; notification now shows ${shownAddress ?: "no address"}")
+        }.onFailure { Log.w(TAG, "Could not update the notification", it) }
     }
 
     /**
@@ -194,6 +301,12 @@ class RemoteControlService : LifecycleService() {
         private const val CHANNEL_ID = "cam-remote-agent"
         private const val NOTIFICATION_ID = 1
         private const val WIFI_LOCK_TAG = "cam-remote:agent"
+
+        /** Asks the running service to stop. Sent only by the notification's own action. */
+        private const val ACTION_STOP = "com.camremote.app.action.STOP"
+
+        /** Distinct from the content intent's 0, or the two PendingIntents would collide. */
+        private const val STOP_REQUEST_CODE = 1
 
         /** Starts the agent. Safe to call when it is already running. */
         fun start(context: Context) {
