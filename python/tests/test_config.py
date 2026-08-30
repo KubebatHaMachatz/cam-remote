@@ -92,5 +92,63 @@ class ResolveTest(unittest.TestCase):
             config.resolve(host=None, port=None, path=self.path)
 
 
+
+class PortValidationTest(unittest.TestCase):
+    """A port arrives from three places, and a bad one must fail the same way from each.
+
+    The environment path already raised CamRemoteError; the file path did not, so a
+    non-numeric port in ~/.camremote.toml escaped as a bare ValueError and reached the user
+    as a traceback rather than an error message.
+    """
+
+    def _load_with_port(self, literal: str) -> config.AgentConfig:
+        with TemporaryDirectory() as directory:
+            path = Path(directory) / "camremote.toml"
+            path.write_text(f'host = "10.0.0.4"\nport = {literal}\n')
+            return config.load(path)
+
+    def test_a_non_numeric_port_in_the_file_is_reported_not_raised_raw(self):
+        with self.assertRaises(CamRemoteError) as caught:
+            self._load_with_port('"eight-thousand"')
+
+        self.assertIn("port", str(caught.exception))
+
+    def test_a_fractional_port_is_refused_rather_than_silently_truncated(self):
+        # int(1.5) is 1, so this would otherwise connect to the wrong port with no complaint.
+        with self.assertRaises(CamRemoteError):
+            self._load_with_port("8099.5")
+
+    def test_a_boolean_port_is_refused(self):
+        # bool is a subclass of int in Python, so int(True) == 1 slips through a naive check.
+        with self.assertRaises(CamRemoteError):
+            self._load_with_port("true")
+
+    def test_a_port_outside_the_valid_range_is_refused(self):
+        for literal in ("0", "65536", "-1"):
+            with self.subTest(port=literal), self.assertRaises(CamRemoteError):
+                self._load_with_port(literal)
+
+    def test_a_valid_port_still_loads(self):
+        self.assertEqual(8099, self._load_with_port("8099").port)
+
+    def test_the_environment_rejects_a_port_outside_the_range(self):
+        with mock.patch.dict(os.environ, {config.ENV_PORT: "70000"}, clear=True):
+            with TemporaryDirectory() as directory:
+                with self.assertRaises(CamRemoteError):
+                    config.resolve(None, None, Path(directory) / "absent.toml")
+
+    def test_the_environment_still_rejects_a_non_numeric_port(self):
+        with mock.patch.dict(os.environ, {config.ENV_PORT: "nope"}, clear=True):
+            with TemporaryDirectory() as directory:
+                with self.assertRaises(CamRemoteError):
+                    config.resolve(None, None, Path(directory) / "absent.toml")
+
+    def test_an_explicit_port_outside_the_range_is_refused(self):
+        with mock.patch.dict(os.environ, {}, clear=True):
+            with TemporaryDirectory() as directory:
+                with self.assertRaises(CamRemoteError):
+                    config.resolve(None, 99999, Path(directory) / "absent.toml")
+
+
 if __name__ == "__main__":
     unittest.main()
