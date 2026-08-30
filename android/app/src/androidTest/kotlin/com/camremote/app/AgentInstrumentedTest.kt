@@ -3,6 +3,8 @@ package com.camremote.app
 import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
+import android.net.Uri
+import android.provider.MediaStore
 import android.os.Build
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
@@ -46,7 +48,7 @@ class AgentInstrumentedTest {
     private lateinit var context: Context
     private lateinit var container: AppContainer
     private lateinit var lifecycle: TestLifecycleOwner
-    private val written = mutableListOf<File>()
+    private val published = mutableListOf<Uri>()
 
     @Before
     fun setUp() {
@@ -82,7 +84,7 @@ class AgentInstrumentedTest {
 
     @After
     fun tearDown() {
-        written.forEach { it.delete() }
+        published.forEach { runCatching { context.contentResolver.delete(it, null, null) } }
     }
 
     @Test
@@ -135,14 +137,74 @@ class AgentInstrumentedTest {
             response.status,
         )
 
-        val file = File(response.data!!["path"]!!.jsonPrimitive.content).also(written::add)
-        assertTrue("the capture should exist on disk", file.isFile)
-        assertTrue("the capture should not be empty", file.length() > 1_000)
+        val data = response.data!!
+        val uri = Uri.parse(data["uri"]!!.jsonPrimitive.content).also(published::add)
 
-        // The magic bytes, because "a file exists" is not the same claim as "a photograph was taken".
-        val header = file.inputStream().use { ByteArray(2).also(it::read) }
-        assertEquals(0xFF.toByte(), header[0])
-        assertEquals(0xD8.toByte(), header[1])
+        // Where a person could actually find it, which is the point of using MediaStore at all.
+        assertEquals(
+            "Documents/cam-remote/instrumented-test.jpg",
+            data["path"]!!.jsonPrimitive.content,
+        )
+
+        val bytes = context.contentResolver.openInputStream(uri)!!.use { it.readBytes() }
+        assertTrue("the capture should not be empty", bytes.size > 1_000)
+
+        // The magic bytes, because "a row exists" is not the same claim as "a photograph was taken".
+        assertEquals(0xFF.toByte(), bytes[0])
+        assertEquals(0xD8.toByte(), bytes[1])
+    }
+
+    @Test
+    fun capturesAreVisibleInSharedStorageWithNoStoragePermission() = runBlocking {
+        assumeTrue("CAMERA is not granted; see the other capture test.", hasCameraPermission())
+
+        // The claim under test is the whole reason captures go through MediaStore: this app holds
+        // no storage permission of any kind, yet the photo lands where the user can reach it.
+        assertEquals(
+            PackageManager.PERMISSION_DENIED,
+            ContextCompat.checkSelfPermission(context, "android.permission.WRITE_EXTERNAL_STORAGE"),
+        )
+
+        val response = container.dispatcherFor(lifecycle).dispatch(
+            CommandRequest(
+                id = "t3b",
+                command = "camera.capture",
+                params = Params.of("path" to "cam-remote/instrumented", "filename" to "shared-check"),
+            ),
+        )
+        assertEquals(CommandStatus.OK, response.status)
+        val uri = Uri.parse(response.data!!["uri"]!!.jsonPrimitive.content).also(published::add)
+
+        // Queried back through MediaStore rather than trusting the response we just received.
+        val columns = arrayOf(
+            MediaStore.MediaColumns.RELATIVE_PATH,
+            MediaStore.MediaColumns.DISPLAY_NAME,
+            MediaStore.MediaColumns.SIZE,
+        )
+        context.contentResolver.query(uri, columns, null, null, null)!!.use { cursor ->
+            assertTrue("MediaStore should have a row for the capture", cursor.moveToFirst())
+            assertEquals("Documents/cam-remote/instrumented/", cursor.getString(0))
+            assertEquals("shared-check.jpg", cursor.getString(1))
+            assertTrue("the stored photo should not be empty", cursor.getLong(2) > 1_000)
+        }
+    }
+
+    @Test
+    fun aFailedCaptureLeavesNothingInTheUsersDocuments() = runBlocking {
+        assumeTrue("CAMERA is not granted; see the other capture test.", hasCameraPermission())
+
+        // A destination that PhotoPaths refuses. The sensor is never touched, so nothing can be
+        // left behind -- but the agent must say so rather than reporting a success.
+        val response = container.dispatcherFor(lifecycle).dispatch(
+            CommandRequest(
+                id = "t3c",
+                command = "camera.capture",
+                params = Params.of("path" to "../escape"),
+            ),
+        )
+
+        assertEquals(CommandStatus.ERROR, response.status)
+        assertEquals(ErrorCode.INVALID_PARAMS, response.error?.code)
     }
 
     @Test
