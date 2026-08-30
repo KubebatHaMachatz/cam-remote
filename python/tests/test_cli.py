@@ -301,6 +301,76 @@ class CatalogTest(CliTestCase):
         self.assertIn("device.getprop", self.out.getvalue())
         self.assertIn("key", self.out.getvalue())
 
+    def _status_client(self, permissions, complete=False, missing=()):
+        return FakeClient(
+            {
+                "system.status": {
+                    "device": {"model": "realme RMX3563", "androidRelease": "14", "apiLevel": 34},
+                    "permissions": permissions,
+                    "setupComplete": complete,
+                    "missing": list(missing),
+                    "hasRearCamera": True,
+                }
+            }
+        )
+
+    def test_lists_every_permission_and_whether_it_is_granted(self):
+        # The whole point of asking a phone in another room: not just what is wrong, but what the
+        # complete picture is.
+        client = self._status_client(
+            {
+                "camera": True,
+                "notifications": True,
+                "canDrawOverlays": False,
+                "ignoringBatteryOptimizations": False,
+            },
+            missing=["canDrawOverlays", "ignoringBatteryOptimizations"],
+        )
+
+        self.run_cli("status", client=client)
+        printed = self.out.getvalue()
+
+        for name in ("camera", "notifications", "canDrawOverlays", "ignoringBatteryOptimizations"):
+            self.assertIn(name, printed)
+        self.assertEqual(2, printed.count("granted"))
+        self.assertEqual(2, printed.count("MISSING"))
+
+    def test_says_what_a_missing_permission_actually_blocks(self):
+        client = self._status_client(
+            {"camera": True, "notifications": True, "canDrawOverlays": False,
+             "ignoringBatteryOptimizations": True},
+            missing=["canDrawOverlays"],
+        )
+
+        self.run_cli("status", client=client)
+
+        self.assertIn("open-camera", self.out.getvalue())
+
+    def test_lists_a_permission_this_client_has_never_heard_of(self):
+        # The agent is the authority on its own permissions, exactly as it is for its commands.
+        # A newer agent must not have a grant silently dropped by an older client.
+        client = self._status_client(
+            {"camera": True, "somethingNewer": False}, missing=["somethingNewer"]
+        )
+
+        self.run_cli("status", client=client)
+
+        self.assertIn("somethingNewer", self.out.getvalue())
+
+    def test_still_says_so_when_everything_is_granted(self):
+        client = self._status_client(
+            {"camera": True, "notifications": True, "canDrawOverlays": True,
+             "ignoringBatteryOptimizations": True},
+            complete=True,
+        )
+
+        self.run_cli("status", client=client)
+        printed = self.out.getvalue()
+
+        self.assertIn("Setup complete", printed)
+        self.assertEqual(4, printed.count("granted"))
+        self.assertNotIn("MISSING", printed)
+
     def test_status_reports_missing_grants(self):
         client = FakeClient(
             {
