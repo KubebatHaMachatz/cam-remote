@@ -1,11 +1,66 @@
-"""Readiness, the device clock, and the device's own command catalog."""
+"""Everything a device will tell you about itself, and its own command catalog.
+
+`status` is the command an operator runs first, after any change, and when meeting a new handset.
+It absorbed two verbs that used to stand alone -- a liveness ping, and a device-report that gathered
+the same four requests into one blob -- because all three answered questions about the device rather
+than doing anything to it, and three commands to learn one thing is two too many.
+"""
 
 from __future__ import annotations
 
+import argparse
+import json
 import time
 from datetime import datetime
+from pathlib import Path
 
 from camremote.commands.base import CliCommand, Context
+from camremote.errors import CamRemoteError, CommandFailed
+
+
+#: Enough to identify a build precisely, and small enough to read. One request, not fifteen.
+SURVEY_PROPERTIES = [
+    "ro.product.manufacturer",
+    "ro.product.brand",
+    "ro.product.model",
+    "ro.product.device",
+    "ro.product.name",
+    "ro.build.version.release",
+    "ro.build.version.sdk",
+    "ro.build.version.security_patch",
+    "ro.build.type",
+    "ro.build.tags",
+    "ro.build.fingerprint",
+    "ro.hardware",
+    "ro.board.platform",
+    "ro.product.cpu.abi",
+]
+
+
+def _configure(parser: argparse.ArgumentParser) -> None:
+    """Declares the optional file to write the full JSON report to."""
+    parser.add_argument(
+        "--out",
+        type=Path,
+        help="Also write the full report as JSON to this file.",
+    )
+
+
+def _collect(context: Context, command: str, params: dict | None = None) -> dict:
+    """Runs one command, turning a failure into part of the report rather than the end of it."""
+    try:
+        return dict(context.agent.invoke(command, params).data)
+    except CommandFailed as failure:
+        return {
+            "error": {
+                "code": failure.code,
+                "message": failure.message,
+                "remediation": failure.remediation,
+            }
+        }
+    except CamRemoteError as failure:
+        return {"error": {"code": "CLIENT", "message": str(failure)}}
+
 
 
 #: What each grant actually enables, in terms of the commands an operator would try.
@@ -24,6 +79,77 @@ PERMISSION_EFFECTS = {
 
 #: Below this, the difference is indistinguishable from the round trip that measured it.
 CLOCK_TOLERANCE_SECONDS = 5
+
+
+def _describe_camera_apps(camera_apps: dict) -> list[str]:
+    """Describes every camera app found, per strategy, and which one would be launched."""
+    lines = ["Camera apps"]
+    if "error" in camera_apps:
+        return lines + [f"  {_error(camera_apps)}"]
+
+    chosen = camera_apps.get("wouldUseComponent")
+    lines.append(
+        f"  camera.open would use: {camera_apps.get('wouldUseStrategy')} → {chosen}"
+        if chosen
+        else "  camera.open would find nothing — no camera app on this device"
+    )
+    for strategy in camera_apps.get("strategies", []):
+        handlers = strategy.get("handlers", [])
+        lines.append(f"  {strategy['strategy']} ({strategy.get('action')}): {len(handlers)} handler(s)")
+        for handler in handlers:
+            marks = []
+            if handler.get("preinstalled"):
+                marks.append("preinstalled")
+            if handler.get("defaultHandler"):
+                marks.append("default handler")
+            suffix = f"  [{', '.join(marks)}]" if marks else ""
+            lines.append(f"      {handler['package']}/{handler['activity']}{suffix}")
+    return lines
+
+
+def _describe_properties(properties: dict) -> list[str]:
+    """Prints the surveyed build properties, skipping any the device does not set."""
+    lines = ["Build"]
+    if "error" in properties:
+        return lines + [f"  {_error(properties)}"]
+
+    values = properties.get("properties", {})
+    width = max((len(key) for key in values), default=0)
+    for key, value in values.items():
+        if value is not None:
+            lines.append(f"  {key.ljust(width)} = {value}")
+    return lines
+
+
+def _describe_commands(commands: dict) -> list[str]:
+    """Names the commands this agent supports, on one line."""
+    if "error" in commands:
+        return ["Commands", f"  {_error(commands)}"]
+    names = [command["name"] for command in commands.get("commands", [])]
+    return [f"Commands ({len(names)}): " + ", ".join(names)]
+
+
+def _error(section: dict) -> str:
+    """Formats a failed section so the report shows what went wrong in place."""
+    error = section["error"]
+    return f"ERROR [{error['code']}] {error['message']}"
+
+
+
+def _collect(context: Context, command: str, params: dict | None = None) -> dict:
+    """Runs one command, turning a failure into part of the answer rather than the end of it."""
+    try:
+        return dict(context.agent.invoke(command, params).data)
+    except CommandFailed as failure:
+        return {
+            "error": {
+                "code": failure.code,
+                "message": failure.message,
+                "remediation": failure.remediation,
+            }
+        }
+    except CamRemoteError as failure:
+        return {"error": {"code": "CLIENT", "message": str(failure)}}
 
 
 def _clock_line(device_time_millis: object, duration_ms: object) -> str:
@@ -68,6 +194,16 @@ def _status(context: Context) -> int:
     response = context.agent.invoke("system.status")
     data = response.data
     device = data.get("device", {})
+
+    # Every remaining section is gathered the way device-report gathered them: a section that
+    # fails becomes part of the answer rather than the end of it. A survey that dies on a broken
+    # device is no survey, and a broken device is exactly when this gets run.
+    report = {
+        "status": data,
+        "cameraApps": _collect(context, "camera.apps"),
+        "properties": _collect(context, "device.getprop", {"keys": SURVEY_PROPERTIES}),
+        "commands": _collect(context, "system.commands"),
+    }
     permissions = data.get("permissions", {})
     missing = data.get("missing", [])
 
@@ -87,7 +223,14 @@ def _status(context: Context) -> int:
             state = "granted" if granted else "MISSING"
             line = f"  {name:<{width}}  {state}"
             lines.append(f"{line}  - {note}" if note else line)
-        lines.append("")
+
+    lines.append("")
+    lines += _describe_camera_apps(report["cameraApps"])
+    lines.append("")
+    lines += _describe_properties(report["properties"])
+    lines.append("")
+    lines += _describe_commands(report["commands"])
+    lines.append("")
 
     if data.get("setupComplete"):
         lines.append("Setup complete: every command is available.")
@@ -95,37 +238,74 @@ def _status(context: Context) -> int:
         lines.append("Setup incomplete. Missing on the device: " + ", ".join(missing))
         lines.append("Open cam-remote on the handset and grant the items listed above.")
 
-    context.emit(data, *lines)
+    if context.args.out:
+        context.args.out.parent.mkdir(parents=True, exist_ok=True)
+        context.args.out.write_text(json.dumps(report, indent=2) + "\n")
+        lines += ["", f"Full report written to {context.args.out}"]
+
+    context.emit(report, *lines)
     return 0
 
 
 def _commands(context: Context) -> int:
-    """Prints the catalog the device reports, including each command's parameters.
+    """Prints the catalog the device reports, split into what the agent is for and how to inspect it.
 
-    Read from the agent rather than from a list held here, so a client can describe a command
-    it was never compiled against.
+    Read from the agent rather than from a list held here, so a client can describe a command it was
+    never compiled against -- including which group that command belongs in. An agent too old to say
+    is listed under diagnostics rather than dropped.
     """
     response = context.agent.invoke("system.commands")
+    catalog = response.data.get("commands", [])
+
+    groups = [
+        ("Primary — what the agent is for", "PRIMARY"),
+        ("Diagnostics — how to inspect it", "DIAGNOSTIC"),
+    ]
+
     lines = []
-    for command in response.data.get("commands", []):
-        lines.append(f"{command['name']} - {command.get('description', '')}")
-        for parameter in command.get("parameters", []):
-            required = "required" if parameter.get("required") else "optional"
-            default = parameter.get("default")
-            suffix = f", default {default}" if default is not None else ""
-            lines.append(
-                f"    {parameter['name']} ({parameter.get('type', '?').lower()}, "
-                f"{required}{suffix}): {parameter.get('description', '')}"
-            )
+    for heading, category in groups:
+        # Anything the agent did not categorise, including from an agent that has never heard of
+        # categories, falls in with the diagnostics.
+        members = [
+            command
+            for command in catalog
+            if (command.get("category") or "DIAGNOSTIC").upper() == category
+        ]
+        if not members:
+            continue
+        if lines:
+            lines.append("")
+        lines.append(f"{heading}:")
+        for command in members:
+            lines.append(f"  {command['name']} - {command.get('description', '')}")
+            for parameter in command.get("parameters", []):
+                required = "required" if parameter.get("required") else "optional"
+                default = parameter.get("default")
+                suffix = f", default {default}" if default is not None else ""
+                lines.append(
+                    f"      {parameter['name']} ({parameter.get('type', '?').lower()}, "
+                    f"{required}{suffix}): {parameter.get('description', '')}"
+                )
+
     context.emit(response.data, *lines)
     return 0
 
 
 
+def _configure_status(parser: argparse.ArgumentParser) -> None:
+    """Declares the optional file to write the full survey to, for a device matrix."""
+    parser.add_argument(
+        "--out",
+        type=Path,
+        help="Also write the full survey as JSON to this file.",
+    )
+
+
 STATUS = CliCommand(
     name="status",
-    help="Report the device, its permissions, and whether setup is complete.",
+    help="Report the device, its permissions, its camera apps, its build and its catalog.",
     run=_status,
+    add_arguments=_configure_status,
 )
 
 COMMANDS = CliCommand(
