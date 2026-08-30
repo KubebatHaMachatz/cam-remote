@@ -66,7 +66,7 @@ In `android/app/src/main/kotlin/com/camremote/app/di/AppContainer.kt`:
     private fun commands(camera: CameraController, descriptors: …): List<Command> = listOf(
         PingCommand(clock),
         …
-        CapturePhotoCommand(camera, photos, permissions, clock),
+        CapturePhotoCommand(camera, photos, permissions, clock, permissionPrompt),
         RebootCommand(AndroidDeviceRebooter(context)),   // ← added
     )
 ```
@@ -112,7 +112,10 @@ REBOOT = CliCommand(
 and one line in `python/camremote/commands/__init__.py`:
 
 ```python
-COMMANDS = (DISCOVER, PAIR, STATUS, PING, LIST_COMMANDS, GETPROP, OPEN_CAMERA, TAKE_PICTURE, REBOOT)
+COMMANDS = (
+    DISCOVER, PAIR, STATUS, PING, LIST_COMMANDS, GETPROP,
+    OPEN_CAMERA, CAMERA_APPS, TAKE_PICTURE, DEVICE_REPORT, REBOOT,
+)
 ```
 
 ### Checklist

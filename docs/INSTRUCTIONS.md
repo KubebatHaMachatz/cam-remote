@@ -179,11 +179,11 @@ timestamps later.
 **Expected output:**
 
 ```
-camera.capture - Take a still photograph with the rear camera and save it on the device.
-    path (string, optional): Destination directory. Must be inside the agent's writable roots.
+camera.apps - List every installed app that could answer a camera intent, and which one camera.open would pick.
+camera.capture - Take a still photograph with the rear camera and save it under Documents.
+    path (string, optional, default Documents/cam-remote): Destination directory, relative to the device's Documents folder.
     filename (string, optional): Bare filename. Defaults to a UTC timestamp.
     jpegQuality (int, optional, default 95): JPEG quality, 1-100.
-    publishToGallery (boolean, optional, default false): Also index the photo in MediaStore...
 camera.open - Open the device's camera app. The lens hint is best-effort and app-dependent.
     lens (string, optional): 'front' or 'rear'. A hint only; camera apps are free to ignore it.
     package (string, optional): Open a specific camera app instead of the device default.
@@ -195,8 +195,9 @@ system.ping - Check that the agent is reachable and report the device clock.
 system.status - Report the device, its permissions, and whether the agent is fully set up.
 ```
 
-(`camera.apps` also appears; the exact set reflects whatever is registered in `AppContainer.kt` on
-the device, so treat this output as the source of truth rather than the list above.)
+(The registry sorts by name, so this is the real order. The exact set reflects whatever is
+registered in `AppContainer.kt` on the device, so treat this output as the source of truth rather
+than the list above.)
 
 **How to verify:** this is read live from the device, not from a hardcoded list on the client side —
 if you add a command to the Android app and reinstall without touching the Python client at all, it
@@ -287,7 +288,7 @@ expect from a given OEM.
 ./scripts/camremote --json open-camera
 ```
 adds `strategy` and `preinstalled`/`defaultHandler` fields — useful when comparing behaviour across
-devices; see [`camera-apps`](#8-camera-apps-diagnose-which-camera-app-would-be-chosen) below for the
+devices; see [`camera-apps`](#8-camera-apps--diagnose-which-camera-app-would-be-chosen) below for the
 full picture without actually opening anything.
 
 **With a lens hint:**
@@ -304,7 +305,7 @@ hint the camera app is free to ignore.
 
 ```
 error [PRECONDITION_FAILED]: Android will not let a background app start an activity without the overlay permission
-  try: Open cam-remote on the device and grant "Display over other apps"
+  try: A settings prompt was shown on the device; grant "Display over other apps" there, then retry
 ```
 
 Exit code `1`. Grant the permission on the phone (Settings → Apps → cam-remote → Display over other
@@ -427,8 +428,8 @@ Traversal is refused the same way, and neither reaches the sensor — no photogr
 ```
 
 Exit code `1`, and — importantly — nothing should have been written anywhere on the device. This
-confirms the path-confinement security check described in
-[DESIGN.md](DESIGN.md#7-security) rejects the request before the camera is even touched.
+confirms the destination check described in [DESIGN.md](DESIGN.md#8-storage) rejects the request
+before the camera is even touched.
 
 **If another app is holding the camera** (e.g. you just ran `open-camera` and the camera app is
 still on screen):

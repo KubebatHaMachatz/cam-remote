@@ -17,7 +17,7 @@ ro.build.version.release = 14
 $ camremote open-camera
 Opened com.oplus.camera/com.oplus.camera.component.CameraImageActivity
 
-$ camremote take-picture --out ./shots
+$ camremote take-picture --out ./shots --filename cli-demo
 Captured 2448x3264, 2.98 MB in 1538 ms
 On the device: Documents/cam-remote/cli-demo.jpg
 Saved to: shots/cli-demo.jpg
@@ -135,7 +135,7 @@ Address saved to /Users/you/.camremote.toml
 ```
 
 No code, no handshake — `pair` here just confirms the agent answers and writes its address to
-`~/.camremote.toml`. `scripts/camremote` is a two-line wrapper that puts the package on the import
+`~/.camremote.toml`. `scripts/camremote` is a small wrapper that puts the package on the import
 path; `cd python && python3 -m camremote …` is exactly equivalent, and `pip install ./python` gives
 you a `camremote` command if you prefer.
 
@@ -168,13 +168,15 @@ Exit codes, for scripting:
 | 2 | The command line was wrong |
 | 3 | No agent could be reached |
 
-`scripts/demo.sh` walks through every capability in the order the assignment lists them.
+`scripts/demo.sh` walks through the three assignment features in the order it lists them, either
+side of `status` and `commands`. The two diagnostics, `camera-apps` and `device-report`, are not in
+it; `docs/DEVICES.md` covers those.
 
 ## Tests
 
 ```bash
-cd android && ./gradlew :core:test :app:testDebugUnitTest   # 151 unit tests
-cd python  && python3 -m unittest discover -s tests -t .    # 69 unit tests
+cd android && ./gradlew :core:test :app:testDebugUnitTest   # 181 unit tests
+cd python  && python3 -m unittest discover -s tests -t .    # 77 unit tests
 ```
 
 Both suites run on a desktop with no device attached and no packages installed. The Python tests use
@@ -183,12 +185,12 @@ Both suites run on a desktop with no device attached and no packages installed. 
 With a handset connected over USB:
 
 ```bash
-cd android && ./gradlew :app:connectedDebugAndroidTest      # 5 instrumented tests
+cd android && ./gradlew :app:connectedDebugAndroidTest      # 7 instrumented tests
 ```
 
-Those five cover only what a desktop JVM structurally cannot: that a real sensor produces a real
+Those seven cover only what a desktop JVM structurally cannot: that a real sensor produces a real
 JPEG, that `getprop` reads the real property store, and that the server answers on a real socket.
-See [docs/DESIGN.md](docs/DESIGN.md#testing) for why the split falls exactly there.
+See [docs/DESIGN.md](docs/DESIGN.md#10-testing) for why the split falls exactly there.
 
 ## Troubleshooting
 
@@ -196,7 +198,7 @@ See [docs/DESIGN.md](docs/DESIGN.md#testing) for why the split falls exactly the
 |---|---|
 | `discover` finds nothing | Many networks block multicast and guest networks isolate clients entirely. Pull down the notification shade on the phone for the address and pass `--host 10.0.0.x`. |
 | `PRECONDITION_FAILED` from `open-camera` | "Display over other apps" is not granted. Tap the app's icon (or its notification) to be walked through what is still missing. |
-| `DEVICE_ERROR: no installed app handles any known camera intent` | The device has no camera app — common on bare AOSP images. `take-picture` still works; it drives the sensor directly. See [docs/DEVICES.md](docs/DEVICES.md). |
+| `DEVICE_ERROR: No installed app handles any known camera intent (tried ...)` | The device has no camera app — common on bare AOSP images. `take-picture` still works; it drives the sensor directly. See [docs/DEVICES.md](docs/DEVICES.md). |
 | `PERMISSION_DENIED` from `take-picture` | The camera permission is missing. `camremote status` lists exactly what is missing, and the command itself tries to prompt the device for it. |
 | `TIMEOUT` from `take-picture` | Something else holds the camera — most often the camera app that `open-camera` just launched. Close it and retry. |
 | Stops answering when the screen is off | Grant "Ignore battery optimisation" (tap the app's icon to be prompted for it). Some OEM builds (Xiaomi, Huawei, realme) kill background services regardless of Android's own rules; on those, add cam-remote to the vendor's own protected-apps list. |
@@ -231,6 +233,6 @@ android/          Gradle project
 python/
   camremote/      The control application. Standard library only.
   tests/
-docs/             Design, architecture, and extension guide.
+docs/             Design, architecture, extension guide, device notes, manual testing.
 scripts/          camremote launcher, and a demo walkthrough.
 ```

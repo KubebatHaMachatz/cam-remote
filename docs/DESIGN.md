@@ -24,7 +24,7 @@ fits that shape:
   depends on nothing from Android.
 - **Ports** are the interfaces the core needs: `CameraController`, `PropertyReader`, `PhotoStore`,
   `ActivityStarter`, `PermissionInspector`, `PermissionPrompt`, `Clock`.
-- **Adapters** in `:app` implement those with CameraX, `ProcessBuilder`, the filesystem, `Intent`,
+- **Adapters** in `:app` implement those with CameraX, `ProcessBuilder`, MediaStore, `Intent`,
   and so on.
 - The **driving port** is `CommandDispatcher`, the single entrance every transport goes through.
 
@@ -39,7 +39,7 @@ the singletons. The one activity the app has, `LaunchActivity`, draws nothing of
 solely to host native Android dialogs — so it has no state worth a ViewModel either.
 
 **Rejected: full Clean Architecture.** Use cases, repositories, mappers, and domain/data/presentation
-layering would be a great deal of structure for six commands, and a reviewer would be right to read
+layering would be a great deal of structure for seven commands, and a reviewer would be right to read
 it as cargo cult. Ports and adapters plus the Command pattern is the right *amount*. Knowing where to
 stop is part of the answer.
 
@@ -268,9 +268,10 @@ allows.
 
 ### The rest
 
-- **The capture destination is confined to an allow-list**, canonicalised before checking — a textual
-  prefix comparison would be fooled by `..`, by a symlink, and by a sibling directory whose name
-  merely starts with the root's. All three are in the tests.
+- **The capture destination is confined to `Documents`**, and there is deliberately no way to name a
+  different primary directory. Absolute paths, `..`, empty or space-padded directory names, an
+  unrestricted character set and unbounded depth are each refused by name. See
+  [§8](#8-storage); the rule is one pure function with seventeen tests.
 - **Property names are validated** against `^[A-Za-z0-9][A-Za-z0-9._-]*$` even though `getprop` is
   executed with the key as a discrete argument and no shell is involved. It costs one regex and
   turns a class of question into a non-question.
@@ -315,7 +316,7 @@ cleared at the next start.
 **The destination parameter is the whole attack surface**, since a directory name arrives over the
 network and becomes a folder. `PhotoPaths` confines it: always relative to `Documents`, never
 absolute, no `..`, no empty or padded segments, a restricted character set, and bounded depth. It is
-a pure function in `:core` with sixteen tests. MediaStore would refuse an escape of its own accord,
+a pure function in `:core` with seventeen tests. MediaStore would refuse an escape of its own accord,
 but relying on that would leave the agent's contract undefined and its error messages down to
 whatever the platform happened to throw.
 
@@ -337,7 +338,7 @@ ids are gone and the agent cannot read them back.
 
 ## 9. Wiring
 
-**Manual constructor injection through `AppContainer`.** Roughly twenty objects, all singletons, no
+**Manual constructor injection through `AppContainer`.** Around fifteen objects, all singletons, no
 scopes beyond the service's. Hilt would add annotation processing and indirection in exchange for
 saving a file that is worth reading: as it stands, the whole composition of the application is one
 page, and the command list is the complete answer to "what can this thing do?".
@@ -360,11 +361,11 @@ capability is a `test:` commit followed by a `feat:` commit.
 TDD only works on code that runs in milliseconds without a device — which is exactly what the
 hexagon delivers. All the decision-making lives in `:core` with no Android imports: target
 resolution, precondition checks, path validation, key sanitising, error mapping, filename
-generation, mDNS parsing, address ranking. Every port has a fake. That is 131 tests in `:core` that
-run in about a second, plus 20 in `:app` for the transport and the filesystem store, and 69 for the
+generation, mDNS parsing, address ranking. Every port has a fake. That is 171 tests in `:core` that
+run in about a second, plus 10 in `:app` for the transport routes, and 77 for the
 Python client.
 
-The adapters left over are three-to-ten-line pass-throughs with no branching. `CameraAppLauncher` is
+The adapters left over are three-to-ten-line pass-throughs with no branching. `CameraAppLaunch` is
 the clearest case: a pure function produces a `LaunchSpec` — tested against the no-camera-app and
 missing-permission cases — and a trivial shell turns it into an `Intent`. `LaunchActivity` is the one
 genuinely untestable piece by this method: it is Android-framework glue by nature (requesting
@@ -377,7 +378,7 @@ real handset alongside the camera and mDNS pieces below.
 2. that the OS permits the background activity launch on a given Android version,
 3. that mDNS traverses a physical network.
 
-Those are the five instrumented tests and the manual run, and both were done on real handsets — a
+Those are the seven instrumented tests and the manual run, and both were done on real handsets — a
 Realme RMX3563 and a Samsung Galaxy S24, both Android 14. The instrumented capture test asserts the
 JPEG magic bytes, because "a file exists" is not the same claim as "a photograph was taken".
 

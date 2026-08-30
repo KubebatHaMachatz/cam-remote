@@ -22,7 +22,7 @@ way, see [DESIGN.md](DESIGN.md).
                     └───────────────────┬──────────────────────┘
                                         │  implemented by
                     ┌───────────────────▼──────────────────────┐
-                    │  Adapters: CameraX · getprop · files ·   │   :app
+                    │  Adapters: CameraX · getprop · MediaStore│   :app
                     │            Intent · NsdManager           │
                     └──────────────────────────────────────────┘
 ```
@@ -52,7 +52,7 @@ transport tests drive real commands rather than re-inventing doubles.
 | Package | Holds |
 |---|---|
 | `transport.http` | `commandApi` (the routes) and `HttpCommandServer` (the Ktor engine's lifetime). |
-| `adapter` | Every port's Android implementation, plus `NsdServiceAdvertiser`, `LocalAddresses` and `GalleryPublisher`. |
+| `adapter` | Every port's Android implementation, plus `NsdServiceAdvertiser` and `LocalAddresses`. |
 | `service` | `RemoteControlService` — foreground service, `LifecycleOwner`, owner of server and advertiser — and `BootReceiver`. |
 | `setup` | `LaunchActivity`, the app's only screen. Draws nothing of its own — see below. |
 | `config` | `ServerConfig`: port and whether the agent has ever been started, in private preferences. |
@@ -143,9 +143,9 @@ Useful when deciding where a change belongs:
 
 | Suite | Count | Runs where |
 |---|---|---|
-| `:core` unit tests | 155 | Desktop JVM, no Android, about a second |
+| `:core` unit tests | 171 | Desktop JVM, no Android, about a second |
 | `:app` unit tests | 10 | Desktop JVM — the Ktor routes |
-| Python unit tests | 69 | Desktop, standard library only |
+| Python unit tests | 77 | Desktop, standard library only |
 | Instrumented | 7 | A real handset: real sensor, real MediaStore, real socket |
 
 The `:app` count fell by ten when captures moved to MediaStore, and that is the boundary working
