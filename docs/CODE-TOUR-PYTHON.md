@@ -6,6 +6,8 @@ before reading or running it.
 
 The Android tour is [CODE-TOUR-ANDROID.md](CODE-TOUR-ANDROID.md). Reading that one first is not
 required, but the two halves are shaped alike on purpose and the symmetry is most of the point.
+[PACKAGES.md](PACKAGES.md) says what each package is responsible for once you need to put something
+somewhere.
 
 ## Before you open anything
 

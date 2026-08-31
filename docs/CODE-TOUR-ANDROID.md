@@ -4,7 +4,9 @@ A reading order for the `android/` project, for someone opening it for the first
 lines of Kotlin across two modules; this walks the spine of it in the order that makes each file
 make sense when you reach it.
 
-[ARCHITECTURE.md](ARCHITECTURE.md) is the map. This is the walk.
+[ARCHITECTURE.md](ARCHITECTURE.md) is the map and this is the walk;
+[PACKAGES.md](PACKAGES.md) says what each package is responsible for once you need to put
+something somewhere.
 
 ## Before you open anything
 
