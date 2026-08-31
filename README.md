@@ -231,6 +231,8 @@ new transport rather than a new feature, and
 | [docs/OVERVIEW-HE.md](docs/OVERVIEW-HE.md) | סקירה קצרה בעברית — the same overview in Hebrew |
 | [docs/DESIGN.md](docs/DESIGN.md) | Every significant decision and why it was made, including the ones rejected |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | The layout of the code and the path a request takes through it |
+| [docs/CODE-TOUR-ANDROID.md](docs/CODE-TOUR-ANDROID.md) | A reading order through the agent, file by file, for a first look |
+| [docs/CODE-TOUR-PYTHON.md](docs/CODE-TOUR-PYTHON.md) | The same for the control application |
 | [docs/EXTENDING.md](docs/EXTENDING.md) | Adding a command, adding a transport, swapping an implementation |
 | [docs/DEVICES.md](docs/DEVICES.md) | What varies between handsets, per-OEM notes, and how to diagnose a new one |
 | [docs/INSTRUCTIONS.md](docs/INSTRUCTIONS.md) | Manual testing walkthrough — every `camremote` command with expected output and how to verify it |
