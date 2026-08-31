@@ -184,7 +184,7 @@ holding the sensor, so the capture has to come after it. The remaining diagnosti
 
 ```bash
 cd android && ./gradlew :core:test :app:testDebugUnitTest   # 187 unit tests
-cd python  && python3 -m unittest discover -s tests -t .    # 56 unit tests
+cd python  && python3 -m unittest discover -s tests -t .    # 59 unit tests
 ```
 
 Both suites run on a desktop with no device attached and no packages installed. The Python tests use

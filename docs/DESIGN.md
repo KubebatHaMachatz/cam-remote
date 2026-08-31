@@ -362,7 +362,7 @@ TDD only works on code that runs in milliseconds without a device — which is e
 hexagon delivers. All the decision-making lives in `:core` with no Android imports: target
 resolution, precondition checks, path validation, key sanitising, error mapping, filename
 generation, address ranking. Every port has a fake. That is 177 tests in `:core` that run in about a
-second, plus 10 in `:app` for the transport routes, and 56 for the Python client.
+second, plus 10 in `:app` for the transport routes, and 59 for the Python client.
 
 The adapters left over are three-to-ten-line pass-throughs with no branching. `CameraAppLaunch` is
 the clearest case: a pure function produces a `LaunchSpec` — tested against the no-camera-app and
