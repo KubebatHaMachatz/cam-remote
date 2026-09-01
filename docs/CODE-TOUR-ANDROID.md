@@ -263,7 +263,7 @@ The request is recorded *before* it runs, so a command that hangs still leaves e
 arrived:
 
 ```
-CamRemote  I  --> camera.capture  id=a1b2c3  params={"filename":"door"}
+cam-remote-app:CamRemote  I  --> camera.capture  id=a1b2c3  params={"filename":"door"}
 ```
 
 The split exists because `run()` has seven ways to produce a response, and logging at each of its
@@ -330,11 +330,14 @@ silently turn every timeout into a dropped connection.
 the device said no, `ERROR` a defect in the agent:
 
 ```
-CamRemote  I  <-- camera.capture  OK  in 2374ms  {"id":"kZ8…","path":"Documents/cam-remote/door.jpg",…}
+cam-remote-app:CamRemote  I  <-- camera.capture  OK  in 2374ms  {"id":"kZ8…","path":"Documents/cam-remote/door.jpg",…}
 ```
 
 Then the route serialises and writes. Every command in the log is two lines, always in that order,
-which is what makes `adb logcat -s CamRemote` the whole story of what the device did.
+which is what makes `adb logcat -s cam-remote-app:CamRemote` the whole story of what the device
+did. Every tag this app writes carries the same `cam-remote-app` prefix — `adb logcat | grep
+cam-remote-app` is the version that also catches the service, the boot receiver and the permission
+prompt, with none of the framework/CameraX noise that shares the app's PID.
 
 ### 9. The second round trip
 

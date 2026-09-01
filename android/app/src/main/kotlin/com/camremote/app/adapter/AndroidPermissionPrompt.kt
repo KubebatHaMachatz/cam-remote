@@ -3,6 +3,7 @@ package com.camremote.app.adapter
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.camremote.app.LOG_TAG_PREFIX
 import com.camremote.app.setup.LaunchActivity
 import com.camremote.core.port.PermissionPrompt
 
@@ -29,6 +30,6 @@ class AndroidPermissionPrompt(private val context: Context) : PermissionPrompt {
     }
 
     private companion object {
-        const val TAG = "AndroidPermissionPrompt"
+        const val TAG = "$LOG_TAG_PREFIX:AndroidPermissionPrompt"
     }
 }

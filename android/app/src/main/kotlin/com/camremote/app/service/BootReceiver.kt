@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.util.Log
+import com.camremote.app.LOG_TAG_PREFIX
 import com.camremote.app.di.AppContainer
 
 /**
@@ -29,6 +30,6 @@ class BootReceiver : BroadcastReceiver() {
     }
 
     private companion object {
-        const val TAG = "BootReceiver"
+        const val TAG = "$LOG_TAG_PREFIX:BootReceiver"
     }
 }

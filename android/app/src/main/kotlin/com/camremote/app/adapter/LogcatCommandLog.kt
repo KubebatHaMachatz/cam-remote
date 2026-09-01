@@ -1,6 +1,7 @@
 package com.camremote.app.adapter
 
 import android.util.Log
+import com.camremote.app.LOG_TAG_PREFIX
 import com.camremote.core.port.CommandLog
 import com.camremote.core.protocol.CommandRequest
 import com.camremote.core.protocol.CommandResponse
@@ -14,12 +15,12 @@ import com.camremote.core.protocol.ErrorCode
  * the device actually did. It is deliberately readable by a human reading a log rather than shaped
  * for a parser — anything wanting structure has the JSON response.
  *
- *     adb logcat -s CamRemote
+ *     adb logcat -s cam-remote-app:CamRemote
  *
- *     CamRemote  I  --> camera.capture  id=a1b2 params={"filename":"door"}
- *     CamRemote  I  <-- camera.capture  OK  in 2374ms  {"id":"kZ8…","path":"Documents/cam-remote/door.jpg",…}
- *     CamRemote  W  <-- camera.open     PRECONDITION_FAILED  in 4ms  Android will not let a background app …
- *     CamRemote  W      remediation: A settings prompt was shown on the device; grant "Display over other apps"
+ *     cam-remote-app:CamRemote  I  --> camera.capture  id=a1b2 params={"filename":"door"}
+ *     cam-remote-app:CamRemote  I  <-- camera.capture  OK  in 2374ms  {"id":"kZ8…","path":"Documents/cam-remote/door.jpg",…}
+ *     cam-remote-app:CamRemote  W  <-- camera.open     PRECONDITION_FAILED  in 4ms  Android will not let a background app …
+ *     cam-remote-app:CamRemote  W      remediation: A settings prompt was shown on the device; grant "Display over other apps"
  *
  * Levels carry meaning, so a filtered log is still useful: a command that worked is `INFO`, one the
  * device refused is `WARN`, and a defect in the agent itself is `ERROR` — the last of those is the
@@ -67,8 +68,12 @@ class LogcatCommandLog : CommandLog {
     }
 
     private companion object {
-        /** One tag for the whole command path, so `adb logcat -s CamRemote` is the whole story. */
-        const val TAG = "CamRemote"
+        /**
+         * One tag for the whole command path. Prefixed with [LOG_TAG_PREFIX] like every other tag
+         * this app writes, so `adb logcat | grep cam-remote-app` catches this alongside the rest and
+         * `adb logcat -s cam-remote-app:CamRemote` isolates just the command traffic.
+         */
+        const val TAG = "$LOG_TAG_PREFIX:CamRemote"
         const val MAX_PAYLOAD = 400
     }
 }

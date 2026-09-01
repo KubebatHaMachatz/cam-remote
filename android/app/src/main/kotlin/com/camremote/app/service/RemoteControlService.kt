@@ -17,6 +17,7 @@ import android.util.Log
 import androidx.core.app.NotificationCompat
 import androidx.core.content.getSystemService
 import androidx.lifecycle.LifecycleService
+import com.camremote.app.LOG_TAG_PREFIX
 import com.camremote.app.R
 import com.camremote.app.adapter.LocalAddresses
 import com.camremote.app.di.AppContainer
@@ -298,7 +299,7 @@ class RemoteControlService : LifecycleService() {
     }
 
     companion object {
-        private const val TAG = "RemoteControlService"
+        private const val TAG = "$LOG_TAG_PREFIX:RemoteControlService"
         private const val CHANNEL_ID = "cam-remote-agent"
         private const val NOTIFICATION_ID = 1
         private const val WIFI_LOCK_TAG = "cam-remote:agent"

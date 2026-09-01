@@ -473,18 +473,23 @@ Everything so far reads the agent's answer. This reads the agent's own account, 
 half — and the half that is still there tomorrow.
 
 ```bash
-adb logcat -s CamRemote
+adb logcat -s cam-remote-app:CamRemote
 ```
+
+Every tag this app writes — every class, not just the command log — starts with `cam-remote-app`,
+so `adb logcat | grep cam-remote-app` is the wider net when the command traffic alone is not the
+whole story: it catches the service, the boot receiver and the permission prompt too, with none of
+the CameraX or framework lines that also carry the app's PID.
 
 Leave it running and issue a command from the other machine. Each one appears twice, on arrival and
 on completion:
 
 ```
-I CamRemote: --> camera.capture  id=0ebf744b  params={"filename":"logged"}
-I CamRemote: <-- camera.capture  OK  in 2356ms  {"id":"8exHY7TL…","path":"Documents/cam-remote/logged.jpg","sizeBytes":3285774,…}
-I CamRemote: --> camera.open  id=247cba03
-W CamRemote: <-- camera.open  PRECONDITION_FAILED  in 15ms  Android will not let a background app start an activity without the overlay permission
-W CamRemote:     remediation: A settings prompt was shown on the device; grant "Display over other apps" there, then retry
+I cam-remote-app:CamRemote: --> camera.capture  id=0ebf744b  params={"filename":"logged"}
+I cam-remote-app:CamRemote: <-- camera.capture  OK  in 2356ms  {"id":"8exHY7TL…","path":"Documents/cam-remote/logged.jpg","sizeBytes":3285774,…}
+I cam-remote-app:CamRemote: --> camera.open  id=247cba03
+W cam-remote-app:CamRemote: <-- camera.open  PRECONDITION_FAILED  in 15ms  Android will not let a background app start an activity without the overlay permission
+W cam-remote-app:CamRemote:     remediation: A settings prompt was shown on the device; grant "Display over other apps" there, then retry
 ```
 
 **What to look for:** a capture's line names the file it wrote, which is the quickest way to confirm

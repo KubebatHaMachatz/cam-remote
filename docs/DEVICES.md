@@ -275,12 +275,16 @@ Watch what the device itself thinks it is doing, which is the fastest way to tel
 never arrived" from "the command arrived and failed":
 
 ```bash
-adb logcat -s CamRemote
+adb logcat -s cam-remote-app:CamRemote
 ```
 
 Every command is logged as it arrives and again with its outcome, duration and payload — including
 the path a capture was written to. A refusal is `WARN` and carries the same remediation the client
 prints; `ERROR` means a defect in the agent and should never appear.
+
+Every tag this app writes — this one included — starts with `cam-remote-app`, so
+`adb logcat | grep cam-remote-app` is the broader net: everything the app itself logged, across
+every class, with none of the framework or CameraX lines that also carry the app's PID.
 
 Then, if something specific needs pinning down:
 

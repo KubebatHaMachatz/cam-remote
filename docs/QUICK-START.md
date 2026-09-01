@@ -96,8 +96,11 @@ Run `status` first — it names every missing permission and what each one block
 Then watch what the phone thinks is happening:
 
 ```bash
-adb logcat -s CamRemote
+adb logcat | grep cam-remote-app
 ```
 
-Every command is logged as it arrives and again with its result. If nothing appears there, the
-request never reached the agent, and the address or the network is the problem rather than the app.
+Every tag this app writes starts with `cam-remote-app`, which is what keeps that grep clean of the
+camera/CameraX/framework noise that also shows up when filtering by package. Narrow further to just
+the command traffic with `adb logcat -s cam-remote-app:CamRemote`. Every command is logged as it
+arrives and again with its result. If nothing appears there, the request never reached the agent,
+and the address or the network is the problem rather than the app.
